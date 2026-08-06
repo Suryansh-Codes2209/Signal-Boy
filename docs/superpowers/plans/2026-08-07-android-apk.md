@@ -2196,7 +2196,7 @@ Expected: the certificate details print with no "DOES NOT VERIFY" error.
 In `site/index.html`, add a download link next to the existing `npx signalboy` install instruction:
 
 ```html
-<a class="btn" href="https://github.com/Suryansh-Codes2209/signalboy/releases/latest/download/signalboy.apk">
+<a class="btn" href="https://github.com/Suryansh-Codes2209/Signal-Boy/releases/latest/download/signalboy.apk">
   DOWNLOAD FOR ANDROID
 </a>
 <p class="note">
@@ -2205,7 +2205,7 @@ In `site/index.html`, add a download link next to the existing `npx signalboy` i
 </p>
 ```
 
-Check the repository slug in the URL against `git remote -v` before committing.
+The slug is `Suryansh-Codes2209/Signal-Boy` (confirmed against `git remote -v`) — note the capitalisation and hyphen, which do not match the npm package name `signalboy`.
 
 - [ ] **Step 5: Document the APK in the README**
 
