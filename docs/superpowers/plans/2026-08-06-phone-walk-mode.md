@@ -525,7 +525,7 @@ The Wake Lock API is secure-context-only, so `navigator.wakeLock` does not exist
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: `createWakeLock()` returning `{ enable(): Promise<string>, disable(): void, get mechanism(): string|null }`. `enable()` resolves to the mechanism actually obtained: `'wakelock'`, `'video'`, or `'none'`. `mechanism` is `null` before `enable()` is called.
+- Produces: `createWakeLock({ onChange } = {})` returning `{ enable(): Promise<string>, disable(): void, get mechanism(): string|null }`. `enable()` resolves to the mechanism actually obtained: `'wakelock'`, `'video'`, or `'none'`. `mechanism` is `null` whenever nothing is held — `'none'` is an outcome `enable()` reports, never a state the object rests in, so `mechanism` can be tested for truth without a failed attempt reading as success. `onChange(mechanism)` fires on every transition, including an involuntary downgrade to `null` when a lock cannot be re-acquired after the tab was hidden.
 
 - [ ] **Step 1: Write the module**
 
@@ -542,10 +542,21 @@ Create `public/js/wakelock.js`:
  * tap, and the UI reports which mechanism it actually got rather than pretending.
  */
 
-export function createWakeLock() {
+export function createWakeLock({ onChange = () => {} } = {}) {
   let sentinel = null;
   let video = null;
   let mechanism = null;
+  let pending = null;
+
+  // `mechanism` is null whenever nothing is actually held. 'none' is an
+  // outcome that enable() reports, never a state the object sits in -- so
+  // callers can test `mechanism` for truth without a failed attempt reading
+  // as success.
+  function setMechanism(next) {
+    if (mechanism === next) return;
+    mechanism = next;
+    onChange(next);
+  }
 
   async function requestNative() {
     if (!navigator.wakeLock?.request) return false;
@@ -558,8 +569,10 @@ export function createWakeLock() {
   }
 
   // A 2x2 canvas captured as a stream is enough to count as playing video, and
-  // avoids shipping a binary asset for the sake of a fallback.
-  function startVideo() {
+  // avoids shipping a binary asset for the sake of a fallback. The play()
+  // promise is awaited rather than fired and forgotten: reporting 'video'
+  // before playback is confirmed would claim a screen hold that never started.
+  async function startVideo() {
     if (typeof HTMLCanvasElement.prototype.captureStream !== 'function') return false;
     try {
       const canvas = document.createElement('canvas');
@@ -576,27 +589,47 @@ export function createWakeLock() {
       video.srcObject = canvas.captureStream(1);
       document.body.append(video);
 
-      const played = video.play();
-      if (played?.catch) played.catch(() => {});
+      await video.play();
       return true;
     } catch {
+      video?.remove();
+      video = null;
       return false;
     }
   }
 
   // The sentinel is released whenever the tab hides; take it again on return.
+  // If that re-acquisition fails, the hold is genuinely gone -- downgrade so
+  // the UI stops claiming it rather than pointing at a released sentinel.
   document.addEventListener('visibilitychange', async () => {
-    if (document.visibilityState === 'visible' && mechanism === 'wakelock' && sentinel?.released) {
-      await requestNative();
+    if (document.visibilityState !== 'visible') return;
+    if (mechanism !== 'wakelock' || !sentinel?.released) return;
+
+    if (!(await requestNative())) {
+      sentinel = null;
+      setMechanism(null);
     }
   });
 
   return {
+    /** Resolves to the mechanism obtained: 'wakelock', 'video', or 'none'. */
     async enable() {
-      if (await requestNative()) mechanism = 'wakelock';
-      else if (startVideo()) mechanism = 'video';
-      else mechanism = 'none';
-      return mechanism;
+      // A second tap while the first attempt is in flight must not start a
+      // rival mechanism and orphan the first one.
+      if (pending) return pending;
+
+      pending = (async () => {
+        if (await requestNative()) setMechanism('wakelock');
+        else if (await startVideo()) setMechanism('video');
+        else setMechanism(null);
+        return mechanism ?? 'none';
+      })();
+
+      try {
+        return await pending;
+      } finally {
+        pending = null;
+      }
     },
 
     disable() {
@@ -604,7 +637,7 @@ export function createWakeLock() {
       sentinel = null;
       video?.remove();
       video = null;
-      mechanism = null;
+      setMechanism(null);
     },
 
     get mechanism() {
@@ -625,7 +658,6 @@ import { createWakeLock } from '../wakelock.js';
 Add the button and its wiring inside `createWalkView`, after `root.append(wrap)`:
 
 ```javascript
-  const wakeLock = createWakeLock();
   const wakeBtn = el('button', { class: 'btn walk-wake', type: 'button', text: 'KEEP AWAKE', 'aria-pressed': 'false' });
   const wakeNote = el('p', { class: 'note walk-wake-note' });
   wrap.append(wakeBtn, wakeNote);
@@ -636,19 +668,27 @@ Add the button and its wiring inside `createWalkView`, after `root.append(wrap)`
     none: 'CANNOT HOLD THE SCREEN AWAKE HERE. RESTART WITH --HTTPS, OR RAISE YOUR PHONE SCREEN TIMEOUT.',
   };
 
+  // Every button state change goes through here, including a downgrade the
+  // user did not ask for -- if the lock is lost on returning to the tab, the
+  // button must stop saying it is held.
+  function showWakeState(mechanism) {
+    const held = mechanism != null;
+    wakeBtn.textContent = held ? 'AWAKE ON' : 'KEEP AWAKE';
+    wakeBtn.setAttribute('aria-pressed', String(held));
+    if (held) wakeNote.textContent = WAKE_LABEL[mechanism];
+  }
+
+  const wakeLock = createWakeLock({ onChange: showWakeState });
+
   wakeBtn.addEventListener('click', async () => {
     if (wakeLock.mechanism) {
       wakeLock.disable();
-      wakeBtn.textContent = 'KEEP AWAKE';
-      wakeBtn.setAttribute('aria-pressed', 'false');
       wakeNote.textContent = '';
       return;
     }
     const got = await wakeLock.enable();
-    wakeNote.textContent = WAKE_LABEL[got];
-    if (got === 'none') return;
-    wakeBtn.textContent = 'AWAKE ON';
-    wakeBtn.setAttribute('aria-pressed', 'true');
+    // 'none' never becomes a mechanism, so onChange does not fire for it.
+    if (got === 'none') wakeNote.textContent = WAKE_LABEL.none;
   });
 ```
 
