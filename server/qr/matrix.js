@@ -204,7 +204,16 @@ function penaltyFinderLike(m, size) {
   return points;
 }
 
-/** N4: ten points for every 5% the dark/light split deviates from even. */
+/**
+ * N4: ten points for every 5% the dark/light split deviates from even.
+ *
+ * Implementations differ here. This is the specification's reading -- whole 5%
+ * steps away from 50%, in either direction -- which is also what ZXing does.
+ * Some encoders round the ratio up instead, which penalises anything above 50%
+ * by a step and occasionally selects a different mask. Either choice scans:
+ * masking is a quality heuristic and the decoder reads the mask number out of
+ * the format information regardless.
+ */
 function penaltyBalance(m, size) {
   let dark = 0;
   for (const row of m) for (const cell of row) if (cell) dark++;
@@ -217,7 +226,7 @@ function penalty(m, size) {
 }
 
 /** 15 format bits: EC level, mask number, BCH(15,5) check bits, XOR 0x5412. */
-export function formatBits(mask) {
+function formatBits(mask) {
   const data = (EC_LEVEL_L << 3) | mask;
   let rest = data << 10;
   const degree = (n) => (n === 0 ? 0 : 32 - Math.clz32(n));

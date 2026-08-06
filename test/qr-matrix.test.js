@@ -4,6 +4,13 @@ import { readFileSync } from 'node:fs';
 
 import { encodeQr } from '../server/qr/index.js';
 
+/**
+ * Ground truth from an independent QR implementation, generated once.
+ *
+ * It must be produced with a single forced byte-mode segment. Left to choose,
+ * most encoders split a URL into Byte + Alphanumeric segments, which is a
+ * perfectly valid code but not one a byte-mode-only encoder can reproduce.
+ */
 const golden = JSON.parse(
   readFileSync(new URL('./fixtures/qr-golden.json', import.meta.url), 'utf8'),
 );

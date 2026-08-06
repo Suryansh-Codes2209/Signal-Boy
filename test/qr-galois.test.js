@@ -26,10 +26,15 @@ test('generator polynomial has the expected degree and leading coefficient', () 
   const g = generatorPoly(10);
   assert.equal(g.length, 11);
   assert.equal(g[0], 1);
+  // The degree-10 generator is fixed by the specification, so pin its
+  // coefficients rather than only its shape.
+  assert.deepEqual(g, [1, 216, 194, 159, 111, 199, 94, 95, 113, 157, 193]);
 });
 
 test('remainder produces the requested number of EC codewords', () => {
   const ec = remainder([32, 91, 11, 120, 209, 114, 220, 77, 67, 64, 236, 17, 236], 10);
   assert.equal(ec.length, 10);
-  assert.ok(ec.every((b) => b >= 0 && b <= 255));
+  // Pinned to the known-good block for this data, since a length-and-range
+  // check alone passes for any XOR of bytes and so proves nothing.
+  assert.deepEqual(ec, [87, 86, 68, 17, 99, 235, 189, 232, 98, 195]);
 });
