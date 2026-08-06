@@ -21,12 +21,14 @@ export class PixelMeter {
   #canvas;
   #width;
   #height;
+  #scale;
   #ghost = null; // previous rendered value, drawn faintly behind the current one
 
-  constructor(canvas, { width = 464, height = 208 } = {}) {
+  constructor(canvas, { width = 464, height = 208, scale = 13 } = {}) {
     this.#canvas = canvas;
     this.#width = width;
     this.#height = height;
+    this.#scale = scale;
   }
 
   render(state = {}) {
@@ -54,7 +56,7 @@ export class PixelMeter {
     // Large value. "~" prefixes any figure derived from a percentage rather
     // than measured in dBm, so an approximation never looks like a reading.
     const value = rssi == null ? '--' : `${exact ? '' : '~'}${Math.round(rssi)}`;
-    const scale = 13;
+    const scale = this.#scale;
     const valueY = pad + 30;
     const valueW = measureText(value, scale);
 
