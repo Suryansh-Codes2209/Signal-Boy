@@ -39,8 +39,8 @@ certificate prompt, and gets something genuinely useful.
 
 ### Walk mode view
 
-New `public/js/views/walk.js`, exposing `createWalkView(root, { platform })` and
-returning `{ render(reading) }` — the same shape `createLiveView` already
+New `public/js/views/walk.js`, exposing `createWalkView(root, context)` and
+returning `{ update(reading) }` — the same shape `createLiveView` already
 returns, so `app.js` routes the stream to it with no special-casing.
 
 Very little new rendering code. `PixelMeter` in `render/meter.js` already draws
@@ -48,6 +48,16 @@ the large bitmap dBm value and the segmented strength bar; `Sparkline` already
 draws the history strip. Walk mode is those two at a larger scale, with the band
 legend, detail stats and companion strip omitted. New CSS sizes the canvas to the
 viewport instead of the 464x208 default.
+
+Two small changes to `render/meter.js` fall out of this. `PixelMeter` hardcodes
+the big-value scale at 13, so a larger canvas alone would not produce larger
+digits — the scale becomes a constructor option, defaulting to 13 so the live
+view is untouched. And `Sparkline` gains a read-only `values` getter, so that
+rebuilding it on a viewport resize inherits the walk so far instead of dropping
+the history.
+
+`app.js` currently routes the stream to a hardcoded `live` lookup; it changes to
+deliver readings to every view exposing an `update` method.
 
 ### Default view selection
 
@@ -99,6 +109,39 @@ Both in `capabilities.js`, the module this work already touches:
   `navigator.bluetooth` in insecure contexts, so an Android Chrome user on plain
   HTTP is told "This browser has no Web Bluetooth. Chrome or Edge is required" —
   the wrong reason.
+
+### QR code for the network URL
+
+Typing `http://192.168.1.14:3000` on a phone keyboard is the last piece of
+friction in the "just open the URL" path. The daemon prints a scannable QR code
+beneath the network URL it already prints at startup.
+
+Written in-house under `server/qr/`, because the alternative is the project's
+first dependency and the README advertises having none twice. Four constraints
+make it far smaller than a general QR encoder:
+
+- Byte mode only. URLs are arbitrary ASCII.
+- Error correction level L, versions 1-4 only. A 78-byte ceiling covers any LAN
+  URL.
+- At level L, versions 1-4 each use a single error-correction block, so
+  data/ECC interleaving is not needed at all.
+- Version information blocks begin at version 7, so none is written. Format
+  information bits are still required.
+
+Split into `galois.js` (GF(256) and Reed-Solomon), `encode.js` (data encoding
+and version selection), `matrix.js` (placement, the eight masks and their
+penalty scoring, format info), `index.js` (the `encodeQr` entry point) and
+`terminal.js` (half-block ANSI rendering with the mandatory four-module quiet
+zone).
+
+Correctness is anchored to a golden matrix: an independent implementation is run
+once via `npx` in a scratch directory, its output confirmed by scanning it with a
+phone, and the resulting matrix committed as `test/fixtures/qr-golden.json`. The
+encoder is then tested against that fixture forever. The tool used to produce it
+is never added to `package.json`.
+
+This is pure logic with no I/O, so it fits the existing `node --test` story
+exactly.
 
 ## Testing
 
