@@ -43,7 +43,7 @@ export function detectClientFeatures() {
     // advertisement scanning with RSSI) additionally needs the experimental
     // web platform features flag, which cannot be feature-detected -- calling
     // it is the only way to find out.
-    webBluetooth: typeof navigator.bluetooth?.requestDevice === 'function',
+    webBluetooth: typeof navigator.bluetooth?.requestDevice === 'function' && secure,
     bluetoothLeScan: typeof navigator.bluetooth?.requestLEScan === 'function',
     camera: typeof navigator.mediaDevices?.getUserMedia === 'function' && secure,
     magnetometer: typeof window.Magnetometer === 'function' && secure,
@@ -52,7 +52,7 @@ export function detectClientFeatures() {
     orientationNeedsPermission:
       typeof window.DeviceOrientationEvent?.requestPermission === 'function',
     geolocation: 'geolocation' in navigator && secure,
-    wakeLock: 'wakeLock' in navigator,
+    wakeLock: 'wakeLock' in navigator && secure,
   };
 }
 
@@ -63,7 +63,7 @@ export function detectClientFeatures() {
 export function unavailableReason(feature, features) {
   if (features[feature]) return null;
 
-  if (!features.secureContext && ['camera', 'magnetometer', 'geolocation'].includes(feature)) {
+  if (!features.secureContext && ['camera', 'magnetometer', 'geolocation', 'webBluetooth', 'wakeLock'].includes(feature)) {
     return 'Browsers block this over plain HTTP. Restart the daemon with --https, or open Signal Boy at localhost on the host machine.';
   }
 
