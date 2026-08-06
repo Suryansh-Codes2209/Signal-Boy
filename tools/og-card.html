@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      /*
+       * Source for site/og.png, rendered at 1200x630 by headless Chrome.
+       *
+       * Lives in tools/ rather than site/ because vercel.json deploys site/ as
+       * the document root -- kept here, the generator never becomes a page.
+       *
+       * Regenerate after changing the tagline or the install command:
+       *
+       *   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+       *     --headless --disable-gpu --hide-scrollbars \
+       *     --force-device-scale-factor=1 --window-size=1200,630 \
+       *     --screenshot=site/og.png tools/og-card.html
+       *
+       * Same DMG system as the landing page and the app: four shades, an 8px
+       * grid, 2px-scale borders, no gradients, no shadows, no border radius.
+       * A share card that did not look like the thing it advertises would be
+       * the one place the design system leaked.
+       *
+       * Scaled up hard from the page's 13px base: this gets seen as a 300px
+       * wide thumbnail in a timeline, so the wordmark has to survive being
+       * shrunk to a quarter size.
+       */
+      :root {
+        --lcd-0: #0f380f;
+        --lcd-1: #306230;
+        --lcd-2: #8bac0f;
+        --lcd-3: #9bbc0f;
+        --shell: #24281f;
+        --bezel: #3b4034;
+        --u: 8px;
+        --font: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        width: 1200px;
+        height: 630px;
+        margin: 0;
+        overflow: hidden;
+      }
+
+      body {
+        padding: calc(var(--u) * 3);
+        background: var(--shell);
+        color: var(--lcd-0);
+        font-family: var(--font);
+        letter-spacing: 0.06em;
+        -webkit-font-smoothing: none;
+      }
+
+      .device {
+        height: 100%;
+        padding: calc(var(--u) * 2);
+        background: var(--bezel);
+        border: 4px solid var(--lcd-0);
+      }
+
+      .lcd {
+        position: relative;
+        height: 100%;
+        padding: calc(var(--u) * 6);
+        background: var(--lcd-3);
+        border: 4px solid var(--lcd-0);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+
+      /*
+       * The same six-bar motif the page header uses.
+       * flex-shrink: 0 is required, not decorative -- as a flex child with a
+       * fixed height and no content, this collapses to nothing the moment the
+       * column overflows, and the motif silently disappears from the card.
+       */
+      .bars {
+        display: flex;
+        flex-shrink: 0;
+        gap: 4px;
+        align-items: flex-end;
+        height: calc(var(--u) * 8);
+        margin-bottom: calc(var(--u) * 2);
+      }
+
+      .bars i {
+        display: block;
+        width: calc(var(--u) * 5);
+        background: var(--lcd-0);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 84px;
+        line-height: 1;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+      }
+
+      /*
+       * 54ch keeps this to two lines; narrower and "move." orphans onto a
+       * third. The readout sits in the top-right corner only, so the text has
+       * the full panel width down here.
+       */
+      .tagline {
+        margin: calc(var(--u) * 2.5) 0 calc(var(--u) * 3.5);
+        font-size: 26px;
+        line-height: 1.5;
+        max-width: 54ch;
+      }
+
+      /* Inverted, exactly like the install strip on the page. */
+      .cmd {
+        align-self: flex-start;
+        background: var(--lcd-0);
+        color: var(--lcd-3);
+        padding: calc(var(--u) * 2) calc(var(--u) * 3);
+        font-size: 34px;
+        letter-spacing: 0.08em;
+      }
+
+      .meta {
+        margin: calc(var(--u) * 3) 0 0;
+        font-size: 19px;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: var(--lcd-1);
+      }
+
+      /* A real reading, sitting where the meter sits in the app. */
+      .readout {
+        position: absolute;
+        top: calc(var(--u) * 9);
+        right: calc(var(--u) * 9);
+        text-align: right;
+      }
+
+      .dbm {
+        font-size: 104px;
+        line-height: 1;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+
+      .band {
+        margin-top: var(--u);
+        font-size: 21px;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="device">
+      <div class="lcd">
+        <div class="readout">
+          <div class="dbm">-58</div>
+          <div class="band">DBM &middot; GOOD</div>
+        </div>
+
+        <div class="bars">
+          <i style="height: 25%"></i>
+          <i style="height: 45%"></i>
+          <i style="height: 70%"></i>
+          <i style="height: 100%"></i>
+          <i style="height: 60%"></i>
+          <i style="height: 35%"></i>
+        </div>
+
+        <h1>Signal Boy</h1>
+        <p class="tagline">
+          WiFi survey tool that runs on your own machine. Walk around and watch the dBm move.
+        </p>
+        <div class="cmd">npx signalboy</div>
+        <p class="meta">Node 20+ &middot; macOS, Windows, Linux &middot; Zero dependencies &middot; MIT</p>
+      </div>
+    </div>
+  </body>
+</html>
