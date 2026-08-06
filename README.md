@@ -34,7 +34,9 @@ It prints two URLs:
 
 **2. Open the local URL.** You get a live dBm readout, a quality band, the noise floor and SNR where your OS reports it, plus the channel, band and PHY mode you are connected on.
 
-**3. Open the network URL on your phone.** Same page, same data, served off your laptop. This is the point: your phone becomes a remote display so you can carry the number around while the laptop stays put. Both devices must be on the same WiFi.
+**3. Open the network URL on your phone.** Same data, served off your laptop, in
+a display sized for walking. Carry the laptop — it holds the radio doing the
+measuring — and read the phone. Both devices must be on the same WiFi.
 
 **4. Walk.** Stand somewhere, wait two or three seconds for the filter to settle, note the number. Repeat. Anything at −67 dBm or better is comfortable; below −80 you are in trouble.
 
@@ -63,6 +65,15 @@ npx signalboy --help
 ## Phones, and the `--https` flag
 
 A phone browser **cannot read WiFi signal strength.** There is no Web API for it on Android or iOS — the OS reserves that for native apps. So on a phone, Signal Boy shows you *the host machine's* readings over the network. That is still the useful thing: the laptop measures, the phone displays.
+
+You do not have to type that address. Signal Boy prints a QR code for it at
+startup — point your phone camera at the terminal.
+
+Open the network URL on a phone and Signal Boy defaults to **walk mode**: the
+dBm value sized to the screen, the history strip, and nothing else. When the
+phone drops off the WiFi the reading dims and starts counting its own age
+rather than presenting a stale number as current. A `KEEP AWAKE` button holds
+the screen on for the length of a survey.
 
 Phones do carry sensors a laptop doesn't — a rear camera, a magnetometer, and on Android, Web Bluetooth. But browsers only expose those in a **secure context**, and `http://192.168.1.14:3000` is not one. Over plain HTTP they stay greyed out.
 
@@ -103,7 +114,7 @@ The app reads this matrix at runtime and greys out what your platform cannot do,
 git clone <repo>
 cd signalboy
 npm start          # same entrypoint as npx
-npm test           # node --test, 51 tests, no test framework
+npm test           # node --test, 82 tests, no test framework
 ```
 
 Zero runtime dependencies and zero dev dependencies. Sensor data flows server→browser over Server-Sent Events; OS-specific parsing is isolated in `server/platform/wifi/*`; the capability matrix in `server/platform/capabilities.js` is pure data and tested directly.

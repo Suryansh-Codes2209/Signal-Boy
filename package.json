@@ -16,6 +16,14 @@
   ],
   "license": "MIT",
   "homepage": "https://signalboy.suryansh.work",
+  "author": "Suryansh",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Suryansh-Codes2209/Signal-Boy.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Suryansh-Codes2209/Signal-Boy/issues"
+  },
   "engines": {
     "node": ">=20"
   },
