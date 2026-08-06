@@ -11,6 +11,8 @@ import { readWifi, scanAccessPoints, startWifiPolling } from './sensors/wifi.js'
 import { Kalman1D, Ewma } from './analysis/filter.js';
 import { gradeRssi, qualityPercent } from './analysis/pathloss.js';
 import { ensureCert, CERT_DIR } from './tls.js';
+import { encodeQr } from './qr/index.js';
+import { renderQr } from './qr/terminal.js';
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const PUBLIC_DIR = join(ROOT, 'public');
@@ -119,6 +121,14 @@ function announce(port) {
   console.log(`  local       ->  ${scheme}://localhost:${port}`);
   for (const { address, interface: iface } of lanAddresses()) {
     console.log(`  network     ->  ${scheme}://${address}:${port}  (${iface})`);
+  }
+
+  // Nobody wants to type an IP address on a phone keyboard. Only the first LAN
+  // address gets a code -- printing one per interface would bury the banner.
+  const [primary] = lanAddresses();
+  if (primary) {
+    console.log('\n  Scan to open on your phone:\n');
+    console.log(renderQr(encodeQr(`${scheme}://${primary.address}:${port}`)));
   }
 
   if (USE_HTTPS) {
