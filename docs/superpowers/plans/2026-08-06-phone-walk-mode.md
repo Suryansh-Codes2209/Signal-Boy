@@ -380,7 +380,7 @@ export function createWalkView(root) {
 }
 ```
 
-The `tick` interval and the resize listener are deliberately never torn down — see the interface note above.
+The `tick` interval and the ResizeObserver are deliberately never torn down — see the interface note above.
 
 - [ ] **Step 2: Expose sparkline values so a resize does not lose history**
 
