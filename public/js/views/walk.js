@@ -102,7 +102,10 @@ export function createWalkView(root) {
       lastReading = reading;
       if (reading?.ok) {
         freshness.mark();
-        spark.push(reading.smoothed ?? reading.rssi);
+        // The sparkline does not exist until the element has had a width, and
+        // readings can arrive before layout. Dropping the first sample or two
+        // is correct here -- the alternative is buffering history nobody sees.
+        spark?.push(reading.smoothed ?? reading.rssi);
       } else {
         freshness.reset();
       }
