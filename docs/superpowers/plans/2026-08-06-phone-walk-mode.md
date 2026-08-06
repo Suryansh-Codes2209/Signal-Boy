@@ -669,13 +669,13 @@ Add the button and its wiring inside `createWalkView`, after `root.append(wrap)`
   };
 
   // Every button state change goes through here, including a downgrade the
-  // user did not ask for -- if the lock is lost on returning to the tab, the
-  // button must stop saying it is held.
+  // user did not ask for -- if the lock is lost on returning to the tab, both
+  // the button and the note must stop saying it is held.
   function showWakeState(mechanism) {
     const held = mechanism != null;
     wakeBtn.textContent = held ? 'AWAKE ON' : 'KEEP AWAKE';
     wakeBtn.setAttribute('aria-pressed', String(held));
-    if (held) wakeNote.textContent = WAKE_LABEL[mechanism];
+    wakeNote.textContent = held ? WAKE_LABEL[mechanism] : '';
   }
 
   const wakeLock = createWakeLock({ onChange: showWakeState });
