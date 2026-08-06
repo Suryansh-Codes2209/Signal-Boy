@@ -27,14 +27,27 @@ export class Freshness {
     this.#markedAt = this.#now();
   }
 
+  /** Forget the last reading entirely, so nothing on screen claims an age. */
   reset() {
     this.#markedAt = null;
   }
 
+  /** Whether there is a reading, whether it is still believable, and its age. */
   state() {
     if (this.#markedAt == null) return { hasReading: false, fresh: false, ageMs: null };
 
     const ageMs = this.#now() - this.#markedAt;
     return { hasReading: true, fresh: ageMs < this.#staleAfterMs, ageMs };
   }
+}
+
+/**
+ * The one status line both walk and live show, so the two views cannot drift
+ * into describing the same state differently. Pure: takes a state() result,
+ * returns text.
+ */
+export function freshnessLabel({ hasReading, fresh, ageMs }, { interfaceName = null } = {}) {
+  if (!hasReading) return 'NO READING';
+  if (fresh) return `LIVE${interfaceName ? ` · ${interfaceName}` : ''}`;
+  return `STALE ${Math.floor(ageMs / 1000)}S · RECONNECTING`;
 }

@@ -1,5 +1,6 @@
 import { el, clear, stat } from '../dom.js';
 import { PixelMeter, Sparkline } from '../render/meter.js';
+import { Freshness, freshnessLabel } from '../freshness.js';
 
 /**
  * Live signal view: the large readout, the rolling history strip and the
@@ -7,7 +8,14 @@ import { PixelMeter, Sparkline } from '../render/meter.js';
  *
  * Every field that a platform cannot provide renders as N/A with the reason
  * attached, rather than as a blank or a fabricated zero.
+ *
+ * That extends to age. This view is one tab away from walk mode on a phone, so
+ * it ages its reading on the same clock and with the same treatment: an update
+ * only fires when a reading arrives, and a number nobody has refreshed for
+ * three seconds is not a live number.
  */
+
+const TICK_MS = 500;
 
 const BAND_LEGEND = [
   { shade: 3, label: 'GOOD  >= -60' },
@@ -21,9 +29,12 @@ export function createLiveView(root, { platform }) {
   const sparkCanvas = el('canvas');
   const statsEl = el('div', { class: 'stats' });
   const noteEl = el('div');
+  const statusEl = el('p', { class: 'status-line', role: 'status', 'aria-live': 'polite' });
 
   const meter = new PixelMeter(meterCanvas);
   const spark = new Sparkline(sparkCanvas);
+  const freshness = new Freshness();
+  let lastReading = null;
 
   root.append(
     el(
@@ -43,6 +54,7 @@ export function createLiveView(root, { platform }) {
           ),
         ),
       ),
+      statusEl,
     ),
     el(
       'section',
@@ -56,6 +68,20 @@ export function createLiveView(root, { platform }) {
   const caps = platform.capabilities;
   meter.render({ connected: false, message: 'WAITING FOR DAEMON' });
   spark.render();
+
+  /**
+   * Only the age presentation, deliberately: the canvases still hold the last
+   * reading, and redrawing them twice a second would rebuild the stats table
+   * for nothing. Dimming and the status line are what has to keep moving.
+   */
+  function showFreshness() {
+    const state = freshness.state();
+    root.dataset.stale = String(state.hasReading && !state.fresh);
+    statusEl.textContent = freshnessLabel(state, { interfaceName: lastReading?.interface });
+  }
+
+  showFreshness();
+  setInterval(showFreshness, TICK_MS);
 
   function renderStats(reading) {
     clear(statsEl).append(
@@ -105,7 +131,11 @@ export function createLiveView(root, { platform }) {
 
   return {
     update(reading) {
+      lastReading = reading;
+
       if (!reading?.ok) {
+        freshness.reset();
+        showFreshness();
         meter.render({ connected: false, message: reading?.error ?? 'NO READING' });
         clear(statsEl);
         clear(noteEl).append(
@@ -131,6 +161,9 @@ export function createLiveView(root, { platform }) {
       spark.render();
       renderStats(reading);
       renderNote(reading);
+
+      freshness.mark();
+      showFreshness();
     },
   };
 }
