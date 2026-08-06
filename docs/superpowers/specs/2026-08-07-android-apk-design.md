@@ -179,8 +179,22 @@ which correctly covers the case where WiFi is disabled mid-walk.
 
 ### Android in the capability matrix
 
-`android` is added to `PLATFORMS` in `core/platforms.js` with `role: HOST` — the
-first mobile host, since it now measures rather than displaying.
+`PLATFORMS` already contains an `android` entry with `role: GUEST`, describing
+Android **in Chrome** — which genuinely cannot read RSSI and is exactly what a
+phone opening the LAN URL is. That entry is correct and stays untouched.
+
+The APK is a different platform and gets its own entry, `androidApp`, with
+`role: HOST` — the first mobile host, since it measures rather than displaying.
+The two must coexist: walk mode over the LAN still serves the browser case, and
+conflating them would make the PLATFORM panel lie to whichever user is not
+holding the APK.
+
+They cannot be told apart by user agent — the APK's WebView reports an Android
+UA like Chrome does — so `detectClientPlatform()` in `public/js/capabilities.js`
+distinguishes them by probing for the bridge, returning `androidApp` when
+`window.SignalBoyNative` is present and `android` otherwise.
+
+`androidApp` declares:
 
 | capability | support | note |
 |---|---|---|
@@ -192,8 +206,10 @@ first mobile host, since it now measures rather than displaying.
 | `camera` | FULL | rear camera, unlike a laptop's webcam |
 | `lanScan`, `mdns`, `bleScan` | NONE | no Node runtime in the APK |
 
-The PLATFORM view renders whatever is in the matrix, so it picks up the fourth
-platform with no changes to `views/platform.js`.
+The PLATFORM view renders whatever is in the matrix, so it picks up the new
+platform with no changes to `views/platform.js`. The comparison panel then shows
+`ANDROID` and `ANDROID APP` side by side, which is the honest presentation: the
+same hardware measures nothing through a browser and everything through the APK.
 
 ### Permissions
 
