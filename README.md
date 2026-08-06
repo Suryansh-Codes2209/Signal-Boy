@@ -70,10 +70,19 @@ You do not have to type that address. Signal Boy prints a QR code for it at
 startup — point your phone camera at the terminal.
 
 Open the network URL on a phone and Signal Boy defaults to **walk mode**: the
-dBm value sized to the screen, the history strip, and nothing else. When the
-phone drops off the WiFi the reading dims and starts counting its own age
-rather than presenting a stale number as current. A `KEEP AWAKE` button holds
-the screen on for the length of a survey.
+dBm value sized to the screen and the history strip, with none of the extra
+chrome the LIVE and PLATFORM tabs carry. When the phone drops off the WiFi the
+reading dims and starts counting its own age rather than presenting a stale
+number as current.
+
+A `KEEP AWAKE` button tries to hold the screen on for the survey. Over HTTPS,
+or on localhost, it uses the browser's Wake Lock API and holds reliably. Over
+plain HTTP — what a plain `npx signalboy` run gives you — that API does not
+exist, so the button falls back to a muted, looping video, which is not
+guaranteed to work on every device. Either way the button says which
+mechanism it is actually using, or tells you plainly that it could not hold
+the screen, in which case the fix is `--https` or a longer screen timeout on
+the phone itself.
 
 Phones do carry sensors a laptop doesn't — a rear camera, a magnetometer, and on Android, Web Bluetooth. But browsers only expose those in a **secure context**, and `http://192.168.1.14:3000` is not one. Over plain HTTP they stay greyed out.
 
