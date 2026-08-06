@@ -44,7 +44,7 @@ export function detectClientFeatures() {
     // web platform features flag, which cannot be feature-detected -- calling
     // it is the only way to find out.
     webBluetooth: typeof navigator.bluetooth?.requestDevice === 'function' && secure,
-    bluetoothLeScan: typeof navigator.bluetooth?.requestLEScan === 'function',
+    bluetoothLeScan: typeof navigator.bluetooth?.requestLEScan === 'function' && secure,
     camera: typeof navigator.mediaDevices?.getUserMedia === 'function' && secure,
     magnetometer: typeof window.Magnetometer === 'function' && secure,
     orientation: typeof window.DeviceOrientationEvent === 'function',
@@ -63,7 +63,19 @@ export function detectClientFeatures() {
 export function unavailableReason(feature, features) {
   if (features[feature]) return null;
 
-  if (!features.secureContext && ['camera', 'magnetometer', 'geolocation', 'webBluetooth', 'wakeLock'].includes(feature)) {
+  // Every entry here is gated on `secure` in detectClientFeatures. The two
+  // lists have to stay in step: a capability missing from this one would be
+  // reported unavailable for the wrong reason.
+  const SECURE_CONTEXT_ONLY = [
+    'camera',
+    'magnetometer',
+    'geolocation',
+    'webBluetooth',
+    'bluetoothLeScan',
+    'wakeLock',
+  ];
+
+  if (!features.secureContext && SECURE_CONTEXT_ONLY.includes(feature)) {
     return 'Browsers block this over plain HTTP. Restart the daemon with --https, or open Signal Boy at localhost on the host machine.';
   }
 
