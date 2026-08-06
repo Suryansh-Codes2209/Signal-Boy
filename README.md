@@ -24,13 +24,33 @@ Use it to find dead zones, pick a router location, work out whether a wall is th
 npx signalboy
 ```
 
-It prints two URLs:
+It prints where to reach it — a local URL, one line per LAN address, and a QR
+code for the first of those addresses:
 
 ```
   SIGNAL BOY  ->  platform MACOS
   local       ->  http://localhost:3000
   network     ->  http://192.168.1.14:3000  (en0)
+
+  Scan to open on your phone:
+
+    █▀▀▀▀▀█ ▀▄█ ▄▀ █▀▀▀▀▀█
+    █ ███ █ █▄▀▀█▄ █ ███ █
+    █ ▀▀▀ █ ▀ ▄█▀▀ █ ▀▀▀ █
+    ▀▀▀▀▀▀▀ ▀ █ ▀▄ ▀▀▀▀▀▀▀
+    ( ... )
+
+  That code is  http://192.168.1.14:3000  (en0)
 ```
+
+The URL beneath the code is the one the code encodes, interface name included,
+so the two can never quietly disagree. Worth a glance: addresses come back in
+the order the OS enumerates them, and on a machine with a Docker bridge, a WSL
+adapter or a VPN, one of those can come first and take the code. If the address
+under the QR is not your WiFi one, use the matching `network` line instead.
+
+The QR is skipped when output is piped or redirected, since half-block glyphs
+and colour escapes are no use in a log file.
 
 **2. Open the local URL.** You get a live dBm readout, a quality band, the noise floor and SNR where your OS reports it, plus the channel, band and PHY mode you are connected on.
 
@@ -59,7 +79,8 @@ npx signalboy --https           # serve over TLS (see below)
 npx signalboy --port 8080       # bind a specific port
 npx signalboy --interval 500    # poll twice a second
 npx signalboy --platform linux  # force a backend
-npx signalboy --help
+npx signalboy --version         # -v also works
+npx signalboy --help            # -h also works
 ```
 
 ## Phones, and the `--https` flag
@@ -123,7 +144,7 @@ The app reads this matrix at runtime and greys out what your platform cannot do,
 git clone <repo>
 cd signalboy
 npm start          # same entrypoint as npx
-npm test           # node --test, 82 tests, no test framework
+npm test           # node --test, no test framework, no dev dependencies
 ```
 
 Zero runtime dependencies and zero dev dependencies. Sensor data flows server→browser over Server-Sent Events; OS-specific parsing is isolated in `server/platform/wifi/*`; the capability matrix in `server/platform/capabilities.js` is pure data and tested directly.
@@ -134,6 +155,7 @@ server/index.js       routes, filter wiring, boot
 server/tls.js         self-signed certificate handling
 server/platform/      OS detection + per-OS WiFi backends
 server/analysis/      Kalman/EWMA filters, path loss + RSSI grading
+server/qr/            the startup QR code, encoder to terminal renderer
 public/               the LCD UI (vanilla ES modules, no build step)
 site/                 the landing page at signalboy.suryansh.work
 ```
