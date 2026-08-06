@@ -119,13 +119,14 @@ function announce(port) {
 
   console.log(`\n  SIGNAL BOY  ->  platform ${info.label}${info.forced ? ' (forced)' : ''}`);
   console.log(`  local       ->  ${scheme}://localhost:${port}`);
-  for (const { address, interface: iface } of lanAddresses()) {
+  const addresses = lanAddresses();
+  for (const { address, interface: iface } of addresses) {
     console.log(`  network     ->  ${scheme}://${address}:${port}  (${iface})`);
   }
 
   // Nobody wants to type an IP address on a phone keyboard. Only the first LAN
   // address gets a code -- printing one per interface would bury the banner.
-  const [primary] = lanAddresses();
+  const [primary] = addresses;
   if (primary) {
     console.log('\n  Scan to open on your phone:\n');
     console.log(renderQr(encodeQr(`${scheme}://${primary.address}:${port}`)));

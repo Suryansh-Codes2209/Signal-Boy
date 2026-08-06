@@ -9,7 +9,9 @@
 
 const PRIMITIVE = 0x11d;
 
-const EXP = new Uint8Array(256);
+// The multiplicative group has 255 elements, and every lookup below reduces its
+// index mod 255, so only entries 0..254 are ever read.
+const EXP = new Uint8Array(255);
 const LOG = new Uint8Array(256);
 
 {
@@ -20,7 +22,6 @@ const LOG = new Uint8Array(256);
     x <<= 1;
     if (x & 0x100) x ^= PRIMITIVE;
   }
-  EXP[255] = EXP[0];
 }
 
 export function exp(n) {

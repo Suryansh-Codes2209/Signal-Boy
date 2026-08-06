@@ -29,7 +29,10 @@ test('produces a full codeword block of data plus error correction', () => {
   const words = toCodewords('http://192.168.1.14:3000');
   // Version 2 at level L: 34 data + 10 EC.
   assert.equal(words.length, 44);
-  assert.ok(words.every((b) => b >= 0 && b <= 255));
+  // Byte mode packs on 4-bit boundaries, so every codeword after the mode
+  // indicator straddles two characters. Derived by hand: 0100 (byte mode),
+  // 0001|1000 (length 24), 0110|1000 ('h'), 0111|0100 ('t'), 0111|... ('t').
+  assert.deepEqual(words.slice(0, 4), [0x41, 0x86, 0x87, 0x47]);
 });
 
 test('starts with the byte-mode indicator and length', () => {

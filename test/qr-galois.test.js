@@ -7,6 +7,12 @@ test('exp and log are inverses across the field', () => {
   for (let i = 1; i < 255; i++) assert.equal(log(exp(i)), i);
 });
 
+test('log of zero is rejected rather than returning a misleading value', () => {
+  // Zero is not a power of the generator, so LOG holds no meaningful entry for
+  // it and an unguarded lookup would read back as log(1) === 0.
+  assert.throws(() => log(0), RangeError);
+});
+
 test('multiplication by zero is zero', () => {
   assert.equal(mul(0, 123), 0);
   assert.equal(mul(123, 0), 0);
