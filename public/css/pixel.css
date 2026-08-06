@@ -450,3 +450,39 @@ canvas {
   .device { border-width: 0; padding: calc(var(--u) / 2); }
   .tab { flex: 1 1 100%; }
 }
+
+/* ---------- walk mode ---------- */
+
+.walk {
+  display: flex;
+  flex-direction: column;
+  gap: var(--u);
+  align-items: center;
+}
+
+.walk-meter,
+.walk-spark {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.walk-status {
+  margin: 0;
+  padding: var(--u);
+  width: 100%;
+  text-align: center;
+  background: var(--lcd-3);
+  border: var(--border) solid var(--lcd-0);
+}
+
+/* Stale readings dim, so an old number never passes for a current one. */
+.walk[data-stale='true'] .walk-meter,
+.walk[data-stale='true'] .walk-spark {
+  opacity: 0.4;
+}
+
+.walk[data-stale='true'] .walk-status {
+  background: var(--lcd-1);
+  color: var(--lcd-3);
+}

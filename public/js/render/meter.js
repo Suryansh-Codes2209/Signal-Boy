@@ -142,6 +142,11 @@ export class Sparkline {
     this.#values = [];
   }
 
+  /** Read-only copy, so a rebuilt sparkline can inherit the walk so far. */
+  get values() {
+    return [...this.#values];
+  }
+
   render() {
     const ctx = setupCanvas(this.#canvas, this.#width, this.#height);
     const W = this.#width;
