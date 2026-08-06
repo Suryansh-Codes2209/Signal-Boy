@@ -226,8 +226,10 @@ Expected: PASS.
 
 - [ ] **Step 7: Verify a live reading is still filtered**
 
-Run: `node bin/signalboy.js --port 3999 &` then `sleep 3 && curl -s localhost:3999/api/wifi` then kill it.
+Run: `node bin/signalboy.js --port 3999 &` then `sleep 6 && curl -s localhost:3999/api/wifi` then kill it.
 Expected: JSON containing both `"rssi"` and `"filtered"` with numeric values.
+
+Six seconds, not three: macOS `system_profiler` takes ~5s on its first call, and `GET /api/wifi` falls back to an unfiltered direct read when the polling loop has not produced a value yet. A short sleep therefore returns a reading with no `filtered` key and looks like a failure that isn't one.
 
 - [ ] **Step 8: Commit**
 
