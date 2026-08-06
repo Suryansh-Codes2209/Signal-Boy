@@ -39,13 +39,13 @@ export function createWalkView(root) {
   };
 
   // Every button state change goes through here, including a downgrade the
-  // user did not ask for -- if the lock is lost on returning to the tab, the
-  // button must stop saying it is held.
+  // user did not ask for -- if the lock is lost on returning to the tab, both
+  // the button and the note must stop saying it is held.
   function showWakeState(mechanism) {
     const held = mechanism != null;
     wakeBtn.textContent = held ? 'AWAKE ON' : 'KEEP AWAKE';
     wakeBtn.setAttribute('aria-pressed', String(held));
-    if (held) wakeNote.textContent = WAKE_LABEL[mechanism];
+    wakeNote.textContent = held ? WAKE_LABEL[mechanism] : '';
   }
 
   const wakeLock = createWakeLock({ onChange: showWakeState });
@@ -53,7 +53,6 @@ export function createWalkView(root) {
   wakeBtn.addEventListener('click', async () => {
     if (wakeLock.mechanism) {
       wakeLock.disable();
-      wakeNote.textContent = '';
       return;
     }
     const got = await wakeLock.enable();
