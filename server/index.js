@@ -50,6 +50,15 @@ const routes = {
 
   'GET /api/wifi/aps': async (req, res) => sendJson(res, 200, await scanAccessPoints()),
 
+  // The client asks for a scan rather than the daemon polling for one: scans are
+  // slow everywhere and rate-limited on some platforms, so they happen when
+  // somebody is looking at the list.
+  'POST /api/scan': async (req, res) => {
+    const result = await scanAccessPoints();
+    publish('aps', result);
+    return sendJson(res, 200, result);
+  },
+
   // Reports the port actually bound, which may not be PORT if it was taken.
   'GET /api/host': (req, res) =>
     sendJson(res, 200, {
