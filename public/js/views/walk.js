@@ -28,7 +28,6 @@ export function createWalkView(root) {
   );
   root.append(wrap);
 
-  const wakeLock = createWakeLock();
   const wakeBtn = el('button', { class: 'btn walk-wake', type: 'button', text: 'KEEP AWAKE', 'aria-pressed': 'false' });
   const wakeNote = el('p', { class: 'note walk-wake-note' });
   wrap.append(wakeBtn, wakeNote);
@@ -39,19 +38,27 @@ export function createWalkView(root) {
     none: 'CANNOT HOLD THE SCREEN AWAKE HERE. RESTART WITH --HTTPS, OR RAISE YOUR PHONE SCREEN TIMEOUT.',
   };
 
+  // Every button state change goes through here, including a downgrade the
+  // user did not ask for -- if the lock is lost on returning to the tab, the
+  // button must stop saying it is held.
+  function showWakeState(mechanism) {
+    const held = mechanism != null;
+    wakeBtn.textContent = held ? 'AWAKE ON' : 'KEEP AWAKE';
+    wakeBtn.setAttribute('aria-pressed', String(held));
+    if (held) wakeNote.textContent = WAKE_LABEL[mechanism];
+  }
+
+  const wakeLock = createWakeLock({ onChange: showWakeState });
+
   wakeBtn.addEventListener('click', async () => {
     if (wakeLock.mechanism) {
       wakeLock.disable();
-      wakeBtn.textContent = 'KEEP AWAKE';
-      wakeBtn.setAttribute('aria-pressed', 'false');
       wakeNote.textContent = '';
       return;
     }
     const got = await wakeLock.enable();
-    wakeNote.textContent = WAKE_LABEL[got];
-    if (got === 'none') return;
-    wakeBtn.textContent = 'AWAKE ON';
-    wakeBtn.setAttribute('aria-pressed', 'true');
+    // 'none' never becomes a mechanism, so onChange does not fire for it.
+    if (got === 'none') wakeNote.textContent = WAKE_LABEL.none;
   });
 
   let meter = null;

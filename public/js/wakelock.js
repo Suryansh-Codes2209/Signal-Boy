@@ -8,10 +8,21 @@
  * tap, and the UI reports which mechanism it actually got rather than pretending.
  */
 
-export function createWakeLock() {
+export function createWakeLock({ onChange = () => {} } = {}) {
   let sentinel = null;
   let video = null;
   let mechanism = null;
+  let pending = null;
+
+  // `mechanism` is null whenever nothing is actually held. 'none' is an
+  // outcome that enable() reports, never a state the object sits in -- so
+  // callers can test `mechanism` for truth without a failed attempt reading
+  // as success.
+  function setMechanism(next) {
+    if (mechanism === next) return;
+    mechanism = next;
+    onChange(next);
+  }
 
   async function requestNative() {
     if (!navigator.wakeLock?.request) return false;
@@ -25,7 +36,7 @@ export function createWakeLock() {
 
   // A 2x2 canvas captured as a stream is enough to count as playing video, and
   // avoids shipping a binary asset for the sake of a fallback.
-  function startVideo() {
+  async function startVideo() {
     if (typeof HTMLCanvasElement.prototype.captureStream !== 'function') return false;
     try {
       const canvas = document.createElement('canvas');
@@ -42,27 +53,45 @@ export function createWakeLock() {
       video.srcObject = canvas.captureStream(1);
       document.body.append(video);
 
-      const played = video.play();
-      if (played?.catch) played.catch(() => {});
+      await video.play();
       return true;
     } catch {
+      video?.remove();
+      video = null;
       return false;
     }
   }
 
   // The sentinel is released whenever the tab hides; take it again on return.
   document.addEventListener('visibilitychange', async () => {
-    if (document.visibilityState === 'visible' && mechanism === 'wakelock' && sentinel?.released) {
-      await requestNative();
+    if (document.visibilityState !== 'visible') return;
+    if (mechanism !== 'wakelock' || !sentinel?.released) return;
+
+    if (!(await requestNative())) {
+      sentinel = null;
+      setMechanism(null);
     }
   });
 
   return {
+    /** Resolves to the mechanism obtained: 'wakelock', 'video', or 'none'. */
     async enable() {
-      if (await requestNative()) mechanism = 'wakelock';
-      else if (startVideo()) mechanism = 'video';
-      else mechanism = 'none';
-      return mechanism;
+      // A second tap while the first attempt is in flight must not start a
+      // rival mechanism and orphan the first one.
+      if (pending) return pending;
+
+      pending = (async () => {
+        if (await requestNative()) setMechanism('wakelock');
+        else if (await startVideo()) setMechanism('video');
+        else setMechanism(null);
+        return mechanism ?? 'none';
+      })();
+
+      try {
+        return await pending;
+      } finally {
+        pending = null;
+      }
     },
 
     disable() {
@@ -70,7 +99,7 @@ export function createWakeLock() {
       sentinel = null;
       video?.remove();
       video = null;
-      mechanism = null;
+      setMechanism(null);
     },
 
     get mechanism() {
