@@ -885,7 +885,9 @@ Replaces the Task 4 placeholder. This is where the filter runs client-side, beca
 
 **Interfaces:**
 - Consumes: `mapConnected`, `mapScanResults` from `android-map.js`; `Kalman1D`, `Ewma` from `core/filter.js`; `gradeRssi`, `qualityPercent` from `core/pathloss.js`; `PLATFORMS`, `capabilityMatrix` from `core/platforms.js`.
-- Produces: `nativeBridge(scope = globalThis)` returning the bridge object or `null`; `createNativeSource(bridge)` returning the same source interface Task 4 defined; `applyFilters(reading, { kalman, ewma })` exported for testing.
+- Produces: `nativeBridge(scope = globalThis)` returning the bridge object or `null`; `createNativeSource(bridge)` returning the same source interface Task 4 defined.
+
+> **As implemented:** `applyFilters(reading, { kalman, ewma })` did not stay in `native.js`. The whole-branch review found the daemon's `onWifiReading` and this module implementing the same pipeline with the same constants and nothing keeping them in sync — a silent divergence waiting for whoever tunes `measurementNoise` in one place. It now lives in `public/js/core/derive.js` and both `server/index.js` and `native.js` import it. Behaviour is identical: `applyFilters` returns the failure object unchanged after resetting both filters, which is exactly what the daemon published before.
 
 - [ ] **Step 1: Write the failing tests**
 
