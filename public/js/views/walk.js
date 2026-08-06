@@ -1,6 +1,7 @@
 import { el } from '../dom.js';
 import { PixelMeter, Sparkline } from '../render/meter.js';
 import { Freshness } from '../freshness.js';
+import { createWakeLock } from '../wakelock.js';
 
 /**
  * The phone view: one number, big enough to read at arm's length while walking.
@@ -26,6 +27,32 @@ export function createWalkView(root) {
     statusEl,
   );
   root.append(wrap);
+
+  const wakeLock = createWakeLock();
+  const wakeBtn = el('button', { class: 'btn walk-wake', type: 'button', text: 'KEEP AWAKE', 'aria-pressed': 'false' });
+  const wakeNote = el('p', { class: 'note walk-wake-note' });
+  wrap.append(wakeBtn, wakeNote);
+
+  const WAKE_LABEL = {
+    wakelock: 'SCREEN HELD AWAKE.',
+    video: 'SCREEN HELD AWAKE VIA VIDEO FALLBACK (PLAIN HTTP).',
+    none: 'CANNOT HOLD THE SCREEN AWAKE HERE. RESTART WITH --HTTPS, OR RAISE YOUR PHONE SCREEN TIMEOUT.',
+  };
+
+  wakeBtn.addEventListener('click', async () => {
+    if (wakeLock.mechanism) {
+      wakeLock.disable();
+      wakeBtn.textContent = 'KEEP AWAKE';
+      wakeBtn.setAttribute('aria-pressed', 'false');
+      wakeNote.textContent = '';
+      return;
+    }
+    const got = await wakeLock.enable();
+    wakeNote.textContent = WAKE_LABEL[got];
+    if (got === 'none') return;
+    wakeBtn.textContent = 'AWAKE ON';
+    wakeBtn.setAttribute('aria-pressed', 'true');
+  });
 
   let meter = null;
   let spark = null;
