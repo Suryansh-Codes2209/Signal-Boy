@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Ewma, Kalman1D, stdDev } from '../server/analysis/filter.js';
+import { Ewma, Kalman1D, stdDev } from '../public/js/core/filter.js';
 
 test('Ewma starts at its first sample rather than at zero', () => {
   const ewma = new Ewma(0.3);

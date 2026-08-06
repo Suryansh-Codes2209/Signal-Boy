@@ -10,7 +10,7 @@ import {
   rssiToDistance,
   fitPathLossExponent,
   DEFAULT_PATH_LOSS,
-} from '../server/analysis/pathloss.js';
+} from '../public/js/core/pathloss.js';
 
 test('gradeRssi puts values in the right band', () => {
   assert.equal(gradeRssi(-35).key, 'excellent');
