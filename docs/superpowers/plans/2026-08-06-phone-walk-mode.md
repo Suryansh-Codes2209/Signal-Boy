@@ -1015,7 +1015,7 @@ export function toCodewords(text) {
 }
 ```
 
-Note on the pad-byte order: the specification starts padding with `0xec`. The test asserts index 17 is `0x11` and index 18 is `0xec` for a 2-byte input, which follows from the first pad landing at an odd index. If the test disagrees with the implementation, trust the golden fixture from Step 1 over both and correct them.
+Note on the pad-byte order, worked through so you do not have to: for the 2-byte input `"HI"`, `pickVersion(2)` gives version 1 with 19 data codewords. The bit stream is `0100` + `00000010` + `01001000` + `01001001` + a 4-bit terminator = 32 bits = 4 bytes `[0x40, 0x24, 0x84, 0x90]`. Padding then starts at index 4, and since `4 % 2 === 0` the first pad byte is `0xec`, as the specification requires. Even indices take `0xec` and odd indices `0x11` from there, so index 17 is `0x11` and index 18 is `0xec`. The test assertions and the implementation agree; if you observe otherwise, the bug is real — do not adjust the test to match.
 
 - [ ] **Step 10: Run to verify the encoder tests pass**
 
@@ -1090,8 +1090,7 @@ No version information block is written — that begins at version 7.
 Create `server/qr/index.js`:
 
 ```javascript
-import { toCodewords } from './encode.js';
-import { pickVersion } from './encode.js';
+import { pickVersion, toCodewords } from './encode.js';
 import { buildMatrix } from './matrix.js';
 
 /**
