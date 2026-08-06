@@ -1,5 +1,5 @@
 import { el, clear, $ } from './dom.js';
-import { Stream, apiGet } from './stream.js';
+import { createSource } from './sources/index.js';
 import { clientProfile } from './capabilities.js';
 import { createCompanion } from './companion.js';
 import { createLiveView } from './views/live.js';
@@ -28,7 +28,7 @@ const state = {
   companion: null,
 };
 
-const stream = new Stream();
+const source = createSource();
 
 function setConnectionState(next) {
   const led = $('#led');
@@ -74,7 +74,7 @@ function buildViews() {
   const context = {
     platform: state.platform,
     client: state.client,
-    stream,
+    source,
     companion: state.companion,
   };
 
@@ -89,7 +89,7 @@ async function start() {
   setConnectionState('connecting');
 
   try {
-    state.platform = await apiGet('/api/platform');
+    state.platform = await source.loadPlatform();
   } catch (err) {
     $('#views').append(
       el(
@@ -113,14 +113,14 @@ async function start() {
   const fallback = state.client.isHostMachine ? 'live' : 'walk';
   mount(VIEWS.some((v) => v.id === initial) ? initial : fallback);
 
-  stream.onStateChange(setConnectionState);
-  stream.on('wifi', (reading) => {
+  source.onStateChange(setConnectionState);
+  source.on('wifi', (reading) => {
     // Every view that consumes readings gets them; PLATFORM has no update and
     // is skipped by the optional call.
     for (const { api } of state.views.values()) api.update?.(reading);
     state.companion.update(reading);
   });
-  stream.connect();
+  source.connect();
   state.companion.greet(state.platform.label);
 }
 
