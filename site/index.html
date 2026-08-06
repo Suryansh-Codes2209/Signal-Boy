@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <title>Signal Boy — WiFi survey tool that runs on your own machine</title>
+    <meta
+      name="description"
+      content="Walk around your house and watch the dBm move. A local WiFi survey tool on a Game Boy LCD. npx signalboy — no install, no dependencies."
+    />
+    <link rel="canonical" href="https://signalboy.suryansh.work" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://signalboy.suryansh.work" />
+    <meta property="og:title" content="Signal Boy" />
+    <meta
+      property="og:description"
+      content="Walk around your house and watch the dBm move. npx signalboy — no install, no dependencies."
+    />
+    <meta name="twitter:card" content="summary" />
+
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Crect width='8' height='8' fill='%239bbc0f'/%3E%3Crect x='1' y='5' width='1' height='2' fill='%230f380f'/%3E%3Crect x='3' y='3' width='1' height='4' fill='%230f380f'/%3E%3Crect x='5' y='1' width='1' height='6' fill='%230f380f'/%3E%3C/svg%3E"
+    />
+
+    <style>
+      /*
+       * Same Gameboy DMG system as the app: four shades, an 8px grid, no
+       * gradients, no shadows, no border radius. The landing page has to look
+       * like the thing it is advertising.
+       */
+      :root {
+        --lcd-0: #0f380f;
+        --lcd-1: #306230;
+        --lcd-2: #8bac0f;
+        --lcd-3: #9bbc0f;
+
+        --shell: #24281f;
+        --bezel: #3b4034;
+
+        --u: 8px;
+        --border: 2px;
+
+        --font: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: var(--u);
+        background: var(--shell);
+        color: var(--lcd-0);
+        font-family: var(--font);
+        font-size: 13px;
+        line-height: 1.6;
+        letter-spacing: 0.06em;
+        -webkit-font-smoothing: none;
+      }
+
+      .device {
+        max-width: 960px;
+        margin: 0 auto calc(var(--u) * 2);
+        padding: var(--u);
+        background: var(--bezel);
+        border: var(--border) solid var(--lcd-0);
+      }
+
+      .lcd {
+        background: var(--lcd-3);
+        border: var(--border) solid var(--lcd-0);
+        padding: calc(var(--u) * 3);
+      }
+
+      h1,
+      h2,
+      h3 {
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        margin: 0;
+        font-weight: 700;
+      }
+
+      h1 {
+        font-size: 32px;
+        line-height: 1.1;
+      }
+
+      h2 {
+        font-size: 15px;
+        border-bottom: var(--border) solid var(--lcd-0);
+        padding-bottom: var(--u);
+        margin: calc(var(--u) * 5) 0 calc(var(--u) * 2);
+      }
+
+      h3 {
+        font-size: 13px;
+        margin: calc(var(--u) * 3) 0 var(--u);
+      }
+
+      p {
+        margin: 0 0 calc(var(--u) * 2);
+        max-width: 62ch;
+      }
+
+      a {
+        color: var(--lcd-0);
+        text-underline-offset: 3px;
+      }
+
+      strong {
+        font-weight: 700;
+      }
+
+      .tagline {
+        text-transform: uppercase;
+        font-size: 13px;
+        margin: var(--u) 0 calc(var(--u) * 3);
+        max-width: 52ch;
+      }
+
+      /* ---------- install command ---------- */
+
+      .install {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        gap: var(--border);
+        margin-bottom: calc(var(--u) * 2);
+      }
+
+      .install code {
+        flex: 1 1 auto;
+        min-width: 0;
+        background: var(--lcd-0);
+        color: var(--lcd-3);
+        padding: calc(var(--u) * 1.5) calc(var(--u) * 2);
+        font-size: 16px;
+        font-family: inherit;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+
+      .install button {
+        flex: 0 0 auto;
+        background: var(--lcd-0);
+        color: var(--lcd-3);
+        border: 0;
+        border-left: var(--border) solid var(--lcd-3);
+        padding: calc(var(--u) * 1.5) calc(var(--u) * 2);
+        font: inherit;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        cursor: pointer;
+      }
+
+      .install button:hover,
+      .install button:focus-visible {
+        background: var(--lcd-1);
+      }
+
+      .meta {
+        text-transform: uppercase;
+        font-size: 11px;
+        color: var(--lcd-1);
+      }
+
+      /* ---------- terminal sample ---------- */
+
+      pre {
+        background: var(--lcd-0);
+        color: var(--lcd-3);
+        padding: calc(var(--u) * 2);
+        margin: 0 0 calc(var(--u) * 2);
+        overflow-x: auto;
+        font-size: 12px;
+        line-height: 1.5;
+        letter-spacing: 0.04em;
+      }
+
+      /* ---------- steps ---------- */
+
+      ol.steps {
+        list-style: none;
+        counter-reset: step;
+        padding: 0;
+        margin: 0 0 calc(var(--u) * 2);
+      }
+
+      ol.steps > li {
+        counter-increment: step;
+        position: relative;
+        padding-left: calc(var(--u) * 5);
+        margin-bottom: calc(var(--u) * 3);
+        max-width: 62ch;
+      }
+
+      ol.steps > li::before {
+        content: counter(step);
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: calc(var(--u) * 3.5);
+        height: calc(var(--u) * 3.5);
+        background: var(--lcd-0);
+        color: var(--lcd-3);
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+      }
+
+      ol.steps b {
+        text-transform: uppercase;
+        display: block;
+      }
+
+      /* ---------- tables ---------- */
+
+      .scroller {
+        overflow-x: auto;
+        margin-bottom: calc(var(--u) * 2);
+        border: var(--border) solid var(--lcd-0);
+      }
+
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        min-width: 480px;
+        font-size: 12px;
+      }
+
+      th,
+      td {
+        border: var(--border) solid var(--lcd-0);
+        border-left: 0;
+        border-top: 0;
+        padding: var(--u) calc(var(--u) * 1.5);
+        text-align: left;
+        text-transform: uppercase;
+        vertical-align: top;
+      }
+
+      th {
+        background: var(--lcd-0);
+        color: var(--lcd-3);
+        border-color: var(--lcd-3);
+        border-left: 0;
+        border-top: 0;
+        white-space: nowrap;
+      }
+
+      tr > *:last-child {
+        border-right: 0;
+      }
+
+      tbody tr:last-child > * {
+        border-bottom: 0;
+      }
+
+      td.yes {
+        background: var(--lcd-2);
+      }
+
+      td.no {
+        background: var(--lcd-1);
+        color: var(--lcd-3);
+      }
+
+      /* ---------- signal bar illustration ---------- */
+
+      .bars {
+        display: flex;
+        gap: var(--border);
+        align-items: flex-end;
+        height: calc(var(--u) * 6);
+        margin-bottom: var(--u);
+      }
+
+      .bars i {
+        display: block;
+        width: calc(var(--u) * 2);
+        background: var(--lcd-0);
+      }
+
+      /* ---------- callout ---------- */
+
+      .note {
+        border: var(--border) solid var(--lcd-0);
+        border-left-width: calc(var(--u) * 1.5);
+        padding: calc(var(--u) * 2);
+        margin: 0 0 calc(var(--u) * 2);
+      }
+
+      .note p:last-child {
+        margin-bottom: 0;
+      }
+
+      /* ---------- footer ---------- */
+
+      footer {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: calc(var(--u) * 2) var(--u) calc(var(--u) * 4);
+        color: var(--lcd-2);
+        text-transform: uppercase;
+        font-size: 11px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: calc(var(--u) * 2);
+      }
+
+      footer a {
+        color: var(--lcd-3);
+      }
+
+      @media (max-width: 600px) {
+        .lcd {
+          padding: calc(var(--u) * 2);
+        }
+        h1 {
+          font-size: 24px;
+        }
+        .install code {
+          font-size: 13px;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="device">
+      <main class="lcd">
+        <header>
+          <div class="bars" aria-hidden="true">
+            <i style="height: 25%"></i>
+            <i style="height: 45%"></i>
+            <i style="height: 70%"></i>
+            <i style="height: 100%"></i>
+            <i style="height: 60%"></i>
+            <i style="height: 35%"></i>
+          </div>
+          <h1>Signal Boy</h1>
+          <p class="tagline">
+            WiFi survey tool that runs on your own machine. Walk around your house and watch the dBm
+            move.
+          </p>
+
+          <div class="install">
+            <code id="cmd">npx signalboy</code>
+            <button type="button" id="copy" data-cmd="npx signalboy">Copy</button>
+          </div>
+          <p class="meta">
+            Node 20+ &middot; macOS, Windows, Linux &middot; zero dependencies &middot; MIT
+          </p>
+        </header>
+
+        <h2>What it does</h2>
+        <p>
+          Signal Boy reads the WiFi signal strength of the machine it runs on, once a second, and
+          renders it on a Game Boy-style LCD in your browser. A Kalman filter drives the displayed
+          number so it settles on the true value instead of jittering; an EWMA drives the sparkline
+          so it stays responsive enough to show you walking.
+        </p>
+        <p>
+          Use it to find dead zones, pick a router location, work out whether a wall is the problem,
+          or check that a mesh node actually helped.
+        </p>
+
+        <h2>How you use it</h2>
+
+        <ol class="steps">
+          <li>
+            <b>Run it on the machine you want to measure.</b>
+            It starts instantly and prints two URLs — one local, one for your network.
+            <pre>$ npx signalboy
+
+  SIGNAL BOY  -&gt;  platform MACOS
+  local       -&gt;  http://localhost:3000
+  network     -&gt;  http://192.168.1.14:3000  (en0)</pre>
+          </li>
+          <li>
+            <b>Open the local URL.</b>
+            You get a live dBm readout, a quality band, the noise floor and SNR where your OS
+            reports it, plus the channel, band and PHY mode you are connected on.
+          </li>
+          <li>
+            <b>Open the network URL on your phone.</b>
+            Same page, same data, served off your laptop. This is the point — your phone becomes a
+            remote display, so you can carry the number around while the laptop stays put. Both
+            devices need to be on the same WiFi.
+          </li>
+          <li>
+            <b>Walk.</b>
+            Stand somewhere, wait two or three seconds for the filter to settle, note the number.
+            Repeat. Anything at &minus;67 dBm or better is comfortable; below &minus;80 you are in
+            trouble.
+          </li>
+        </ol>
+
+        <h3>Reading the number</h3>
+        <div class="scroller">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">dBm</th>
+                <th scope="col">What it means</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>&minus;30 to &minus;50</td>
+                <td>Excellent. You are next to the router.</td>
+              </tr>
+              <tr>
+                <td>&minus;50 to &minus;67</td>
+                <td>Good. Video calls and streaming are fine.</td>
+              </tr>
+              <tr>
+                <td>&minus;67 to &minus;70</td>
+                <td>Usable. Fine for browsing, marginal for calls.</td>
+              </tr>
+              <tr>
+                <td>&minus;70 to &minus;80</td>
+                <td>Weak. Expect stalls.</td>
+              </tr>
+              <tr>
+                <td>Below &minus;80</td>
+                <td>Effectively unusable.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Signal is logarithmic: &minus;60 dBm is ten times the power of &minus;70 dBm, not 17%
+          more.
+        </p>
+
+        <h2>Options</h2>
+        <pre>npx signalboy --https           # serve over TLS (see below)
+npx signalboy --port 8080       # bind a specific port
+npx signalboy --interval 500    # poll twice a second
+npx signalboy --platform linux  # force a backend
+npx signalboy --help</pre>
+
+        <h2>Phones</h2>
+        <p>
+          A phone browser <strong>cannot read WiFi signal strength.</strong> There is no Web API for
+          it on Android or iOS — the OS reserves that for native apps. So on a phone, Signal Boy
+          shows you <em>the host machine's</em> readings over the network. That is still the useful
+          thing: the laptop measures, the phone displays.
+        </p>
+        <p>
+          Phones do carry sensors a laptop doesn't — a rear camera, a magnetometer, and on Android,
+          Web Bluetooth. But browsers only expose those in a secure context, and
+          <code>http://192.168.1.14:3000</code> is not one. Over plain HTTP they stay greyed out.
+          Running with <code>--https</code> generates a self-signed certificate covering your
+          current LAN addresses and serves over TLS. Your phone warns once; accept it and those
+          sensors become available while the page still talks to your laptop.
+        </p>
+
+        <div class="note">
+          <p>
+            <strong>Why isn't there a hosted version to try?</strong>
+            Because it could not work. A page served from an HTTPS origin cannot fetch
+            <code>http://192.168.1.14:3000</code> — browsers block mixed content with no override.
+            A hosted copy would get a secure context and lose every reading. The daemon has to serve
+            the page itself, which is why this site is documentation and the tool is an
+            <code>npx</code> command.
+          </p>
+        </div>
+
+        <h2>What works where</h2>
+        <p>
+          Capabilities differ sharply by OS, and they do not form a hierarchy — Windows sees every
+          nearby access point while macOS refuses to. Signal Boy reads this matrix at runtime and
+          greys out what your platform cannot do, with the reason printed next to it. It never shows
+          you a number it had to invent.
+        </p>
+
+        <div class="scroller">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Capability</th>
+                <th scope="col">macOS</th>
+                <th scope="col">Windows</th>
+                <th scope="col">Linux</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">Own signal</th>
+                <td class="yes">Exact</td>
+                <td class="yes">Yes</td>
+                <td class="yes">Exact</td>
+              </tr>
+              <tr>
+                <th scope="row">Scan all APs</th>
+                <td class="no">No</td>
+                <td class="yes">Full</td>
+                <td class="yes">Partial</td>
+              </tr>
+              <tr>
+                <th scope="row">See own SSID</th>
+                <td class="no">No</td>
+                <td class="yes">Yes</td>
+                <td class="yes">Yes</td>
+              </tr>
+              <tr>
+                <th scope="row">Noise / SNR</th>
+                <td class="yes">Yes</td>
+                <td class="no">No</td>
+                <td class="yes">Driver</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          <strong>macOS</strong> removed the <code>airport</code> CLI in 14.4 and reclassified WiFi
+          metadata as location data. <code>system_profiler</code> still reports your connected
+          network's signal and noise without sudo, which is enough to survey your own network, but
+          neighbouring SSIDs come back redacted.
+          <strong>Windows</strong> is the strongest platform here: <code>netsh</code> lists every
+          visible AP with SSID, BSSID, band, channel and signal, with no admin rights.
+          <strong>Linux</strong> reads true dBm from <code>/proc/net/wireless</code> with no root.
+        </p>
+      </main>
+    </div>
+
+    <footer>
+      <span>Signal Boy &middot; MIT</span>
+      <a href="https://www.npmjs.com/package/signalboy">npm</a>
+      <a href="https://github.com/suryansh/signalboy">GitHub</a>
+    </footer>
+
+    <script>
+      const button = document.getElementById('copy');
+
+      button.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(button.dataset.cmd);
+          button.textContent = 'Copied';
+        } catch {
+          // Clipboard access is refused over insecure origins and in some
+          // browsers; select the text so the user can copy it by hand.
+          const range = document.createRange();
+          range.selectNodeContents(document.getElementById('cmd'));
+          const selection = getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+          button.textContent = 'Press ⌘C';
+        }
+        setTimeout(() => {
+          button.textContent = 'Copy';
+        }, 2000);
+      });
+    </script>
+  </body>
+</html>

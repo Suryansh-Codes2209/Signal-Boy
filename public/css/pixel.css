@@ -1,0 +1,452 @@
+/*
+ * Gameboy DMG design system.
+ *
+ * Four shades, nothing else. No gradients, no shadows, no border radius, no
+ * anti-aliased edges. Every dimension is a multiple of 8px so the layout sits
+ * on the same grid as the bitmap font. The palette constraint is load-bearing:
+ * the heatmap quantises to exactly these four values.
+ */
+
+:root {
+  --lcd-0: #0f380f; /* darkest  - text, borders, dead signal */
+  --lcd-1: #306230; /* dark     - weak signal */
+  --lcd-2: #8bac0f; /* light    - fair signal */
+  --lcd-3: #9bbc0f; /* lightest - panel background, strong signal */
+
+  --shell: #24281f;
+  --bezel: #3b4034;
+
+  --u: 8px;
+  --border: 2px;
+
+  --font: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  padding: var(--u);
+  min-height: 100vh;
+  background: var(--shell);
+  color: var(--lcd-0);
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.5;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+}
+
+img,
+canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  max-width: 100%;
+}
+
+/* ---------- shell + LCD panel ---------- */
+
+.device {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: var(--u);
+  background: var(--bezel);
+  border: var(--border) solid var(--lcd-0);
+}
+
+.lcd {
+  position: relative;
+  background: var(--lcd-3);
+  border: var(--border) solid var(--lcd-0);
+  padding: var(--u);
+}
+
+/* LCD pixel grid. Sits above content but never intercepts clicks. */
+.lcd::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(15, 56, 15, 0.07) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgba(15, 56, 15, 0.05) 0 1px, transparent 1px 3px);
+}
+
+/* ---------- header ---------- */
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--u);
+  flex-wrap: wrap;
+  padding: var(--u);
+  margin-bottom: var(--u);
+  background: var(--lcd-0);
+  color: var(--lcd-3);
+}
+
+.titlebar h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+}
+
+.titlebar .sub {
+  font-size: 11px;
+  color: var(--lcd-2);
+  letter-spacing: 0.14em;
+}
+
+/* Blinking connection indicator. */
+.led {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  background: var(--lcd-1);
+  border: var(--border) solid var(--lcd-3);
+  vertical-align: middle;
+}
+.led[data-state="live"] {
+  background: var(--lcd-3);
+  animation: blink 1.2s steps(1, end) infinite;
+}
+.led[data-state="error"] {
+  background: var(--lcd-1);
+}
+
+@keyframes blink {
+  0%, 60% { opacity: 1; }
+  61%, 100% { opacity: 0.25; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .led[data-state="live"] { animation: none; }
+}
+
+/* ---------- companion (TRK + speech) ---------- */
+
+.companion {
+  display: flex;
+  align-items: stretch;
+  gap: var(--u);
+  margin-bottom: var(--u);
+  padding: var(--u);
+  background: var(--lcd-2);
+  border: var(--border) solid var(--lcd-0);
+}
+
+.companion-bot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: calc(var(--u) / 2);
+  background: var(--lcd-3);
+  border: var(--border) solid var(--lcd-0);
+}
+
+.speech {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--lcd-3);
+  border: var(--border) solid var(--lcd-0);
+}
+
+.speech-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--u);
+  padding: calc(var(--u) / 2) var(--u);
+  background: var(--lcd-0);
+  color: var(--lcd-3);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+}
+
+.speech-mute {
+  padding: 0 calc(var(--u) / 2);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  border-width: 1px;
+}
+
+.speech-text {
+  flex: 1 1 auto;
+  margin: 0;
+  padding: var(--u);
+  font-size: 12px;
+  line-height: 1.6;
+  min-height: calc(var(--u) * 6);
+}
+
+/* Blinking terminal cursor after the typed text. */
+.speech-text::after {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 12px;
+  margin-left: 3px;
+  background: var(--lcd-0);
+  vertical-align: -2px;
+  animation: blink 1s steps(1, end) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .speech-text::after { animation: none; }
+}
+
+@media (max-width: 480px) {
+  .companion { flex-wrap: wrap; }
+  .companion-bot { margin: 0 auto; }
+}
+
+/* ---------- navigation ---------- */
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--border);
+  margin-bottom: var(--u);
+}
+
+.tab {
+  flex: 1 1 auto;
+  padding: var(--u) calc(var(--u) * 1.5);
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  color: var(--lcd-0);
+  background: var(--lcd-2);
+  border: var(--border) solid var(--lcd-0);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tab:hover:not(:disabled) {
+  background: var(--lcd-3);
+}
+
+.tab[aria-selected="true"] {
+  background: var(--lcd-0);
+  color: var(--lcd-3);
+}
+
+.tab:disabled {
+  color: var(--lcd-1);
+  background: var(--lcd-2);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.tab:focus-visible,
+.btn:focus-visible {
+  outline: var(--border) solid var(--lcd-0);
+  outline-offset: var(--border);
+}
+
+/* ---------- panels ---------- */
+
+.panel {
+  border: var(--border) solid var(--lcd-0);
+  margin-bottom: var(--u);
+  background: var(--lcd-3);
+}
+
+.panel > h2 {
+  margin: 0;
+  padding: calc(var(--u) / 2) var(--u);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  background: var(--lcd-0);
+  color: var(--lcd-3);
+}
+
+.panel-body {
+  padding: var(--u);
+}
+
+.grid {
+  display: grid;
+  gap: var(--u);
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+/* ---------- stat readouts ---------- */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--border);
+  background: var(--lcd-0);
+  border: var(--border) solid var(--lcd-0);
+}
+
+.stat {
+  padding: var(--u);
+  background: var(--lcd-3);
+}
+
+.stat dt {
+  margin: 0 0 calc(var(--u) / 2);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--lcd-1);
+}
+
+.stat dd {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+
+.stat dd .unit {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--lcd-1);
+}
+
+.stat[data-muted="true"] dd {
+  color: var(--lcd-1);
+}
+
+/* ---------- legend ---------- */
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--u);
+  padding: var(--u);
+  border-top: var(--border) solid var(--lcd-0);
+  font-size: 11px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) / 2);
+}
+
+.swatch {
+  width: 14px;
+  height: 14px;
+  border: var(--border) solid var(--lcd-0);
+  flex: none;
+}
+.swatch[data-shade="0"] { background: var(--lcd-0); }
+.swatch[data-shade="1"] { background: var(--lcd-1); }
+.swatch[data-shade="2"] { background: var(--lcd-2); }
+.swatch[data-shade="3"] { background: var(--lcd-3); }
+
+/* ---------- capability matrix ---------- */
+
+.matrix {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.matrix th,
+.matrix td {
+  border: var(--border) solid var(--lcd-0);
+  padding: calc(var(--u) / 2);
+  text-align: center;
+}
+
+.matrix th {
+  background: var(--lcd-0);
+  color: var(--lcd-3);
+  letter-spacing: 0.1em;
+}
+
+.matrix th[scope="row"] {
+  text-align: left;
+  background: var(--lcd-2);
+  color: var(--lcd-0);
+  white-space: nowrap;
+}
+
+.matrix td[data-support="full"] { background: var(--lcd-3); }
+.matrix td[data-support="partial"] { background: var(--lcd-2); }
+.matrix td[data-support="none"] { background: var(--lcd-1); color: var(--lcd-2); }
+
+.matrix col.is-active,
+.matrix td.is-active,
+.matrix th.is-active {
+  outline: var(--border) solid var(--lcd-0);
+  outline-offset: calc(var(--border) * -1);
+}
+
+.matrix .mark {
+  font-weight: 700;
+}
+
+/* ---------- buttons + misc ---------- */
+
+.btn {
+  padding: calc(var(--u) / 2) var(--u);
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  color: var(--lcd-0);
+  background: var(--lcd-2);
+  border: var(--border) solid var(--lcd-0);
+  cursor: pointer;
+}
+.btn:hover { background: var(--lcd-3); }
+.btn[aria-pressed="true"] { background: var(--lcd-0); color: var(--lcd-3); }
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--u) / 2);
+  align-items: center;
+}
+
+.note {
+  margin: var(--u) 0 0;
+  padding: var(--u);
+  border-left: calc(var(--u) / 2) solid var(--lcd-1);
+  background: var(--lcd-2);
+  font-size: 11px;
+  line-height: 1.6;
+  text-transform: none;
+  letter-spacing: 0.03em;
+}
+
+.note strong {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.hidden { display: none !important; }
+
+.meter-wrap {
+  display: flex;
+  justify-content: center;
+  padding: var(--u) 0;
+}
+
+.view:not(.is-active) { display: none; }
+
+@media (max-width: 640px) {
+  body { padding: 0; }
+  .device { border-width: 0; padding: calc(var(--u) / 2); }
+  .tab { flex: 1 1 100%; }
+}

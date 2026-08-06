@@ -1,0 +1,36 @@
+{
+  "name": "signalboy",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "WiFi survey and RF tool that runs on your own machine. Walk around, watch the dBm move.",
+  "keywords": [
+    "wifi",
+    "rssi",
+    "dbm",
+    "survey",
+    "heatmap",
+    "network",
+    "rf",
+    "signal",
+    "cli"
+  ],
+  "license": "MIT",
+  "homepage": "https://signalboy.suryansh.work",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "signalboy": "bin/signalboy.js"
+  },
+  "files": [
+    "bin",
+    "server",
+    "public",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "node bin/signalboy.js",
+    "test": "node --test"
+  }
+}

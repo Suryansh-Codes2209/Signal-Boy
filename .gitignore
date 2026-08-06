@@ -1,0 +1,12 @@
+node_modules/
+*.log
+*.tgz
+
+# Generated TLS material, in case anyone points the cert dir at the repo.
+*.pem
+cert.json
+
+.DS_Store
+.vercel/
+.idea/
+.vscode/
