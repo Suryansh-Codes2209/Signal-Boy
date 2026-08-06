@@ -4,6 +4,7 @@ import { clientProfile } from './capabilities.js';
 import { createCompanion } from './companion.js';
 import { createLiveView } from './views/live.js';
 import { createPlatformView } from './views/platform.js';
+import { createWalkView } from './views/walk.js';
 
 /**
  * Application shell: fetches platform info, registers views and routes the
@@ -14,6 +15,7 @@ import { createPlatformView } from './views/platform.js';
  */
 
 const VIEWS = [
+  { id: 'walk', label: 'WALK', create: createWalkView },
   { id: 'live', label: 'LIVE', create: createLiveView },
   { id: 'platform', label: 'PLATFORM', create: createPlatformView },
 ];
@@ -108,11 +110,14 @@ async function start() {
   buildViews();
 
   const initial = location.hash.slice(1);
-  mount(VIEWS.some((v) => v.id === initial) ? initial : VIEWS[0].id);
+  const fallback = state.client.isHostMachine ? 'live' : 'walk';
+  mount(VIEWS.some((v) => v.id === initial) ? initial : fallback);
 
   stream.onStateChange(setConnectionState);
   stream.on('wifi', (reading) => {
-    state.views.get('live')?.api.update(reading);
+    // Every view that consumes readings gets them; PLATFORM has no update and
+    // is skipped by the optional call.
+    for (const { api } of state.views.values()) api.update?.(reading);
     state.companion.update(reading);
   });
   stream.connect();
