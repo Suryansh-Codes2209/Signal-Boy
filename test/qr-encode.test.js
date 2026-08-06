@@ -46,3 +46,13 @@ test('pads with the alternating pad bytes', () => {
   assert.equal(words[17], 0x11);
   assert.equal(words[18], 0xec);
 });
+
+test('the pad run starts at 0xEC even when the data ends on an odd codeword', () => {
+  // Byte mode spends 2 codewords on the header, so odd-length text leaves the
+  // pad run starting at an odd index. It must still start at 0xEC: keying the
+  // alternation off the codeword index instead of the pad count inverts the
+  // whole run for every odd-length input, which even-length fixtures miss.
+  const words = toCodewords('https://192.168.1.14:3000'); // 25 bytes -> version 2
+  assert.equal(words.length, 44);
+  assert.deepEqual(words.slice(27, 34), [0xec, 0x11, 0xec, 0x11, 0xec, 0x11, 0xec]);
+});

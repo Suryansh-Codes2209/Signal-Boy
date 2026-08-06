@@ -49,8 +49,11 @@ export function toCodewords(text) {
   for (let i = 0; i < bits.length; i += 8) {
     data.push(bits.slice(i, i + 8).reduce((acc, bit) => (acc << 1) | bit, 0));
   }
-  // Alternating pad bytes fill the remaining capacity.
-  while (data.length < spec.dataCodewords) data.push(PAD_BYTES[data.length % 2 === 0 ? 0 : 1]);
+  // Alternating pad bytes fill the remaining capacity. The count is kept
+  // separately from the codeword index because the run always starts at 0xEC
+  // regardless of where in the block padding begins -- for odd-length text the
+  // two parities disagree, and keying off the index yields the inverted run.
+  for (let pad = 0; data.length < spec.dataCodewords; pad++) data.push(PAD_BYTES[pad % 2]);
 
   return [...data, ...remainder(data, spec.ecCodewords)];
 }
