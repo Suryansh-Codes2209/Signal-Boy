@@ -9,6 +9,44 @@ import { PALETTE, shadeColor, setupCanvas } from './palette.js';
 
 const BAR_SEGMENTS = 20;
 
+// PixelMeter lays out from both ends of the canvas, so these two numbers
+// between them decide the minimum usable height: the digits start at VALUE_TOP
+// and run 7*scale tall, and the strength bar is anchored BAR_FROM_BOTTOM from
+// the bottom edge. They are module constants rather than literals inside
+// render() because any caller sizing its own canvas has to honour the same
+// arithmetic -- see meterHeightForScale below.
+const PAD = 12;
+const VALUE_TOP = PAD + 30;
+const BAR_FROM_BOTTOM = 64;
+const GRID = 8;
+
+const DEFAULT_WIDTH = 464;
+const DEFAULT_HEIGHT = 208;
+const DEFAULT_SCALE = 13;
+const MIN_SCALE = 8;
+
+/**
+ * The largest digit scale that fits `width`, floored so the digits stay legible
+ * on a narrow phone.
+ */
+export function meterScaleForWidth(width) {
+  return Math.max(MIN_SCALE, Math.floor((width / DEFAULT_WIDTH) * DEFAULT_SCALE));
+}
+
+/**
+ * The smallest canvas height, snapped to the 8px grid, at which digits drawn at
+ * `scale` clear the strength bar.
+ *
+ * Exported because walk mode sizes its canvas to the viewport. Deriving that
+ * height independently -- from an aspect ratio -- is exactly what let the bar,
+ * which is drawn after the digits, paint over the number on every screen
+ * narrower than about 410px. One extra grid row keeps the clearance at 8px or
+ * better rather than at zero.
+ */
+export function meterHeightForScale(scale) {
+  return Math.ceil((VALUE_TOP + 7 * scale + BAR_FROM_BOTTOM + GRID) / GRID) * GRID;
+}
+
 /** Maps 0-100 quality onto the four shades used by the bar and legend. */
 function qualityShade(quality) {
   if (quality >= 70) return 3;
@@ -24,7 +62,7 @@ export class PixelMeter {
   #scale;
   #ghost = null; // previous rendered value, drawn faintly behind the current one
 
-  constructor(canvas, { width = 464, height = 208, scale = 13 } = {}) {
+  constructor(canvas, { width = DEFAULT_WIDTH, height = DEFAULT_HEIGHT, scale = DEFAULT_SCALE } = {}) {
     this.#canvas = canvas;
     this.#width = width;
     this.#height = height;
@@ -36,7 +74,7 @@ export class PixelMeter {
     const ctx = setupCanvas(this.#canvas, this.#width, this.#height);
     const W = this.#width;
     const H = this.#height;
-    const pad = 12;
+    const pad = PAD;
 
     ctx.fillStyle = PALETTE[3];
     ctx.fillRect(0, 0, W, H);
@@ -57,7 +95,7 @@ export class PixelMeter {
     // than measured in dBm, so an approximation never looks like a reading.
     const value = rssi == null ? '--' : `${exact ? '' : '~'}${Math.round(rssi)}`;
     const scale = this.#scale;
-    const valueY = pad + 30;
+    const valueY = VALUE_TOP;
     const valueW = measureText(value, scale);
 
     if (this.#ghost && this.#ghost !== value) {
@@ -72,7 +110,7 @@ export class PixelMeter {
       color: PALETTE[1],
     });
 
-    this.#drawBar(ctx, pad, H - 64, W - pad * 2, 30, quality);
+    this.#drawBar(ctx, pad, H - BAR_FROM_BOTTOM, W - pad * 2, 30, quality);
 
     drawText(ctx, `${Math.round(quality)}% STRENGTH`, pad, H - 24, {
       scale: 2,
@@ -101,12 +139,14 @@ export class PixelMeter {
     }
   }
 
+  // Uses the configured scale, not the desktop default: walk mode gives this
+  // class a phone-sized canvas, and desktop-sized dashes ran off the edge of it.
   #drawOffline(ctx, W, H, message) {
     ctx.fillStyle = PALETTE[2];
     ctx.fillRect(0, 0, W, H);
-    drawText(ctx, '--', 12, 42, { scale: 13, color: PALETTE[1] });
+    drawText(ctx, '--', PAD, VALUE_TOP, { scale: this.#scale, color: PALETTE[1] });
     const text = message.slice(0, 34).toUpperCase();
-    drawText(ctx, text, 12, H - 40, { scale: 2, color: PALETTE[0] });
+    drawText(ctx, text, PAD, H - 40, { scale: 2, color: PALETTE[0] });
   }
 }
 

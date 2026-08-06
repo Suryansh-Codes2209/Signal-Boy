@@ -96,7 +96,9 @@ async function start() {
         'p',
         { class: 'note' },
         el('strong', { text: 'Daemon unreachable: ' }),
-        `${err.message}. Start it with "npm start" and reload.`,
+        // Published users run npx, not npm start -- and on a phone the daemon
+        // is on a different machine entirely, so "start it" has to say where.
+        `${err.message}. Run "npx signalboy" on the machine doing the measuring, then reload this page.`,
       ),
     );
     setConnectionState('error');

@@ -96,6 +96,13 @@ function announce(port) {
   const info = platformInfo();
   const scheme = USE_HTTPS ? 'https' : 'http';
 
+  // Before any printing. This whole function runs inside a 'listening' handler,
+  // where a throw is an uncaught exception -- so nothing to do with drawing a
+  // banner may be able to leave the daemon dead, or alive with no sensor loop
+  // and every browser stuck on WAITING FOR DAEMON.
+  startWifiPolling(WIFI_INTERVAL_MS, onWifiReading);
+  publish('platform', info);
+
   console.log(`\n  SIGNAL BOY  ->  platform ${info.label}${info.forced ? ' (forced)' : ''}`);
   console.log(`  local       ->  ${scheme}://localhost:${port}`);
   const addresses = lanAddresses();
@@ -107,8 +114,31 @@ function announce(port) {
   // address gets a code -- printing one per interface would bury the banner.
   const [primary] = addresses;
   if (primary) {
-    console.log('\n  Scan to open on your phone:\n');
-    console.log(renderQr(encodeQr(`${scheme}://${primary.address}:${port}`)));
+    const url = `${scheme}://${primary.address}:${port}`;
+
+    // The code is built before anything is printed, so a failure costs a QR
+    // rather than half a banner. Skipped entirely when stdout is not a
+    // terminal: `npx signalboy | tee run.log` would otherwise write ANSI
+    // escapes and half-block glyphs into the log.
+    let qr = null;
+    if (process.stdout.isTTY) {
+      try {
+        qr = renderQr(encodeQr(url));
+      } catch {
+        qr = null;
+      }
+    }
+
+    if (qr) {
+      console.log('\n  Scan to open on your phone:\n');
+      console.log(qr);
+    }
+    // Always printed, code or no code. lanAddresses() returns interfaces in
+    // enumeration order, and on a developer machine the first is as likely to
+    // be docker0, a WSL adapter or a VPN as the WiFi card -- so the encoded URL
+    // has to be visible beside the code it encodes. If they disagree, that is
+    // now something the user can see rather than a scan that goes nowhere.
+    console.log(`\n  ${qr ? 'That code is' : 'Open on your phone:'}  ${url}  (${primary.interface})`);
   }
 
   if (USE_HTTPS) {
@@ -119,9 +149,6 @@ function announce(port) {
     console.log('  Restart with --https to enable them.');
   }
   console.log('');
-
-  startWifiPolling(WIFI_INTERVAL_MS, onWifiReading);
-  publish('platform', info);
 }
 
 /**
@@ -144,24 +171,53 @@ async function createAppServer() {
  * ports rather than dying -- the actual URL is printed on startup either way.
  */
 const MAX_PORT_ATTEMPTS = 10;
+const MAX_PORT = 65535;
 let attempt = 0;
+/** The port currently being tried, so error messages name the right one. */
+let currentPort = PORT;
+
+function die(...lines) {
+  console.error(`\n  ${lines.join('\n  ')}\n`);
+  process.exit(1);
+}
+
+// Checked before listening rather than caught afterwards: `--port abc` becomes
+// NaN, and net.Server#listen throws ERR_SOCKET_BAD_PORT synchronously for that
+// -- at module top level, where it would surface as a raw stack trace instead
+// of the friendly message every other bad flag gets.
+if (!Number.isInteger(PORT) || PORT < 0 || PORT > MAX_PORT) {
+  die(
+    `${JSON.stringify(process.env.PORT ?? '')} is not a port number.`,
+    `--port takes a whole number from 0 to ${MAX_PORT}.`,
+  );
+}
 
 try {
   server = await createAppServer();
 } catch (err) {
-  console.error(`\n  ${err.message}\n`);
-  process.exit(1);
+  die(err.message);
 }
 
 server.on('error', (err) => {
-  if (err.code !== 'EADDRINUSE') throw err;
-  attempt += 1;
-  if (attempt >= MAX_PORT_ATTEMPTS) {
-    console.error(`\n  Ports ${PORT}-${PORT + attempt - 1} are all in use. Set PORT to choose one.\n`);
-    process.exit(1);
+  // Bind failures arrive here as events, so a bare `throw` would be an uncaught
+  // exception with a stack trace. Each of these has a fix the user can act on.
+  if (err.code === 'EACCES') {
+    die(
+      `Port ${currentPort} is reserved: binding it needs administrator privileges.`,
+      'Pick a port above 1023 instead, for example --port 8080.',
+    );
   }
+  if (err.code !== 'EADDRINUSE') {
+    die(`Could not bind ${currentPort}: ${err.message}`);
+  }
+
+  attempt += 1;
   const next = PORT + attempt;
-  console.warn(`  port ${next - 1} in use, trying ${next}...`);
+  if (attempt >= MAX_PORT_ATTEMPTS || next > MAX_PORT) {
+    die(`Ports ${PORT}-${currentPort} are all in use. Pass --port to choose one.`);
+  }
+  console.warn(`  port ${currentPort} in use, trying ${next}...`);
+  currentPort = next;
   server.listen(next, '0.0.0.0');
 });
 

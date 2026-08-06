@@ -467,7 +467,7 @@ canvas {
   justify-content: center;
 }
 
-.walk-status {
+.status-line {
   margin: 0;
   padding: var(--u);
   width: 100%;
@@ -476,13 +476,17 @@ canvas {
   border: var(--border) solid var(--lcd-0);
 }
 
-/* Stale readings dim, so an old number never passes for a current one. */
-.walk[data-stale='true'] .walk-meter,
-.walk[data-stale='true'] .walk-spark {
+/* Stale readings dim, so an old number never passes for a current one. Walk
+   and live both set data-stale on their own root and share this treatment --
+   the tab bar is one tap wide, so the two views must not disagree about how
+   old a number is. */
+[data-stale='true'] .walk-meter,
+[data-stale='true'] .walk-spark,
+[data-stale='true'] .meter-wrap {
   opacity: 0.4;
 }
 
-.walk[data-stale='true'] .walk-status {
+[data-stale='true'] .status-line {
   background: var(--lcd-1);
   color: var(--lcd-3);
 }

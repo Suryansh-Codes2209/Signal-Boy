@@ -1,6 +1,6 @@
 import { el } from '../dom.js';
-import { PixelMeter, Sparkline } from '../render/meter.js';
-import { Freshness } from '../freshness.js';
+import { PixelMeter, Sparkline, meterScaleForWidth, meterHeightForScale } from '../render/meter.js';
+import { Freshness, freshnessLabel } from '../freshness.js';
 import { createWakeLock } from '../wakelock.js';
 
 /**
@@ -17,7 +17,7 @@ const TICK_MS = 500;
 export function createWalkView(root) {
   const meterCanvas = el('canvas');
   const sparkCanvas = el('canvas');
-  const statusEl = el('p', { class: 'walk-status', role: 'status', 'aria-live': 'polite' });
+  const statusEl = el('p', { class: 'status-line', role: 'status', 'aria-live': 'polite' });
 
   const wrap = el(
     'div',
@@ -80,10 +80,13 @@ export function createWalkView(root) {
     if (w === builtWidth) return;
     builtWidth = w;
 
-    // Scale the digits to the width; 13 is the desktop default at 464px.
-    const scale = Math.max(8, Math.floor((w / 464) * 13));
-    // Snapped to the 8px grid the rest of the layout sits on.
-    const height = Math.round((w * 0.45) / 8) * 8;
+    // Scale the digits to the width, then take the height from the scale.
+    // Both come from PixelMeter's own layout arithmetic rather than being
+    // guessed here: deriving the height from an aspect ratio instead let the
+    // strength bar, which is drawn after the digits, paint over the number on
+    // every screen narrower than about 410px.
+    const scale = meterScaleForWidth(w);
+    const height = meterHeightForScale(scale);
 
     const kept = spark;
     meter = new PixelMeter(meterCanvas, { width: w, height, scale });
@@ -97,12 +100,13 @@ export function createWalkView(root) {
     // Nothing to draw until the element has had a width, and so a renderer.
     if (!meter || !spark) return;
 
-    const { hasReading, fresh, ageMs } = freshness.state();
+    const state = freshness.state();
+    const { hasReading, fresh } = state;
 
     if (!hasReading || !lastReading?.ok) {
       meter.render({ connected: false, message: lastReading?.error ?? 'WAITING FOR DAEMON' });
       spark.render();
-      statusEl.textContent = 'NO READING';
+      statusEl.textContent = freshnessLabel(state);
       wrap.dataset.stale = 'false';
       return;
     }
@@ -117,9 +121,7 @@ export function createWalkView(root) {
     spark.render();
 
     wrap.dataset.stale = String(!fresh);
-    statusEl.textContent = fresh
-      ? `LIVE${lastReading.interface ? ` · ${lastReading.interface}` : ''}`
-      : `STALE ${Math.floor(ageMs / 1000)}S · RECONNECTING`;
+    statusEl.textContent = freshnessLabel(state, { interfaceName: lastReading.interface });
   }
 
   const observer = new ResizeObserver(([entry]) => {

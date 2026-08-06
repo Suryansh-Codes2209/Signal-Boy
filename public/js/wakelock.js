@@ -27,7 +27,18 @@ export function createWakeLock({ onChange = () => {} } = {}) {
   async function requestNative() {
     if (!navigator.wakeLock?.request) return false;
     try {
-      sentinel = await navigator.wakeLock.request('screen');
+      const held = await navigator.wakeLock.request('screen');
+      sentinel = held;
+      // The platform can drop the lock on its own -- battery saver, a thermal
+      // or OS policy -- while the tab is still visible, which is the whole of
+      // a walk. visibilitychange never fires for that, so without this the UI
+      // would go on making the strongest claim it has while nothing holds the
+      // screen. Releases we asked for, releases caused by hiding the tab, and
+      // a late event from a sentinel already replaced are all excluded here.
+      held.addEventListener('release', () => {
+        if (sentinel !== held || mechanism !== 'wakelock') return;
+        if (document.visibilityState === 'visible') setMechanism(null);
+      });
       return true;
     } catch {
       return false;
@@ -63,13 +74,28 @@ export function createWakeLock({ onChange = () => {} } = {}) {
   }
 
   // The sentinel is released whenever the tab hides; take it again on return.
+  // A video hold survives hiding no better -- browsers pause offscreen media --
+  // so it is re-verified on the same event rather than assumed. Either way, a
+  // hold that could not be recovered is reported as lost, not kept on screen.
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState !== 'visible') return;
-    if (mechanism !== 'wakelock' || !sentinel?.released) return;
 
-    if (!(await requestNative())) {
-      sentinel = null;
-      setMechanism(null);
+    if (mechanism === 'wakelock' && sentinel?.released) {
+      if (!(await requestNative())) {
+        sentinel = null;
+        setMechanism(null);
+      }
+      return;
+    }
+
+    if (mechanism === 'video' && video?.paused) {
+      try {
+        await video.play();
+      } catch {
+        video.remove();
+        video = null;
+        setMechanism(null);
+      }
     }
   });
 

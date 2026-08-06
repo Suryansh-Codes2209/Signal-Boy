@@ -8,7 +8,6 @@
     "rssi",
     "dbm",
     "survey",
-    "heatmap",
     "network",
     "rf",
     "signal",
