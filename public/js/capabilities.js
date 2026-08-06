@@ -11,9 +11,13 @@
  * to *call* the device; probing decides what it can actually do.
  */
 
-export function detectClientPlatform() {
-  const ua = navigator.userAgent;
-  const touchMac = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+export function detectClientPlatform(scope = globalThis) {
+  // The APK's WebView sends an Android user agent exactly as Chrome does, so
+  // sniffing cannot separate them. The bridge only exists in the APK.
+  if (scope.SignalBoyNative) return 'androidApp';
+
+  const ua = scope.navigator.userAgent;
+  const touchMac = scope.navigator.platform === 'MacIntel' && scope.navigator.maxTouchPoints > 1;
 
   if (/android/i.test(ua)) return 'android';
   if (/iphone|ipad|ipod/i.test(ua) || touchMac) return 'ios';

@@ -12,6 +12,7 @@ import {
   hostPlatforms,
 } from '../public/js/core/platforms.js';
 import { detectHostPlatform } from '../server/platform/capabilities.js';
+import { detectClientPlatform } from '../public/js/capabilities.js';
 import {
   percentToDbm,
   dbmToPercent,
@@ -70,7 +71,7 @@ test('unsupported capabilities explain themselves', () => {
 
 test('only host platforms can run the daemon', () => {
   const ids = hostPlatforms().map((p) => p.id).sort();
-  assert.deepEqual(ids, ['darwin', 'linux', 'win32']);
+  assert.deepEqual(ids, ['androidApp', 'darwin', 'linux', 'win32']);
   assert.equal(PLATFORMS.android.role, ROLE.GUEST);
   assert.equal(PLATFORMS.ios.role, ROLE.GUEST);
 });
@@ -89,6 +90,41 @@ test('capabilityMatrix covers every capability against every platform', () => {
     assert.ok(row.label, `row ${row.key} has no label`);
     assert.deepEqual(Object.keys(row.byPlatform).sort(), Object.keys(PLATFORMS).sort());
   }
+});
+
+test('the android app is a host platform that measures exactly', () => {
+  const app = PLATFORMS.androidApp;
+  assert.ok(app, 'androidApp must be in the matrix');
+  assert.equal(app.role, ROLE.HOST);
+  assert.equal(app.capabilities.connectedRssi.support, SUPPORT.FULL);
+  assert.equal(app.capabilities.connectedRssi.exact, true);
+});
+
+test('android-in-a-browser survives as a separate guest platform', () => {
+  // The APK does not replace the browser case: a phone opening the LAN URL is
+  // still a guest that cannot read RSSI, and walk mode exists to serve it.
+  assert.equal(PLATFORMS.android.role, ROLE.GUEST);
+  assert.equal(PLATFORMS.android.capabilities.connectedRssi.support, SUPPORT.NONE);
+});
+
+test('the android app is the only platform scanning APs with exact dBm', () => {
+  const exactScanners = Object.values(PLATFORMS).filter(
+    (p) => p.capabilities.scanAllAps.support === SUPPORT.FULL && p.capabilities.scanAllAps.exact === true,
+  );
+  assert.deepEqual(exactScanners.map((p) => p.id), ['androidApp']);
+});
+
+test('the android app reports no noise floor, so SNR is unavailable', () => {
+  assert.equal(PLATFORMS.androidApp.capabilities.noiseFloor.support, SUPPORT.NONE);
+  assert.ok(PLATFORMS.androidApp.capabilities.noiseFloor.detail);
+});
+
+test('the bridge, not the user agent, identifies the android app', () => {
+  // The APK's WebView sends an Android UA exactly as Chrome does, so sniffing
+  // cannot tell them apart. Probing for the bridge can.
+  const ua = { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36' };
+  assert.equal(detectClientPlatform({ navigator: ua }), 'android');
+  assert.equal(detectClientPlatform({ navigator: ua, SignalBoyNative: {} }), 'androidApp');
 });
 
 test('detectHostPlatform maps process.platform, defaulting unknown unixes to linux', () => {

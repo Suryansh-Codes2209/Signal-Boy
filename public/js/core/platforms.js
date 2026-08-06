@@ -154,6 +154,37 @@ export const PLATFORMS = {
       magnetometer: { support: SUPPORT.NONE, detail: 'Safari does not expose the Magnetometer API.' },
     },
   },
+
+  androidApp: {
+    id: 'androidApp',
+    label: 'ANDROID APP',
+    role: ROLE.HOST,
+    note: 'The only platform that measures where you are actually standing. WifiManager gives exact dBm with no permission at all, and exact per-AP dBm with one -- but scans are throttled to 4 per 2 minutes and no noise floor is exposed.',
+    capabilities: {
+      connectedRssi: {
+        support: SUPPORT.FULL,
+        exact: true,
+        via: 'WifiManager.getConnectionInfo()',
+        detail: 'Real dBm, no permission required.',
+      },
+      scanAllAps: {
+        support: SUPPORT.FULL,
+        exact: true,
+        via: 'WifiManager.getScanResults()',
+        detail: 'Exact dBm per access point, unlike netsh. Hard-throttled to 4 scans per 2 minutes, so the list is refreshed on demand rather than live.',
+      },
+      ssidVisible: {
+        support: SUPPORT.PARTIAL,
+        detail: 'Android classifies WiFi identity as location data. Without the location grant, SSID reads <unknown ssid> and BSSID reads 02:00:00:00:00:00.',
+      },
+      noiseFloor: { support: SUPPORT.NONE, detail: 'AOSP exposes no noise floor, so SNR cannot be computed.' },
+      lanScan: { support: SUPPORT.NONE, detail: 'No Node runtime in the APK; raw sockets are unavailable to a WebView.' },
+      mdns: { support: SUPPORT.NONE, detail: 'No Node runtime in the APK.' },
+      bleScan: { support: SUPPORT.NONE, detail: 'Not wired up. The APK ships WiFi sensing only.' },
+      camera: { support: SUPPORT.FULL, detail: 'Rear camera, unlike a laptop webcam.' },
+      magnetometer: { support: SUPPORT.FULL, detail: 'Phones carry a real magnetometer.' },
+    },
+  },
 };
 
 /** Every capability key, in the order the UI should list them. */
