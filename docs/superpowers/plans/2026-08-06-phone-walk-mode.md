@@ -805,17 +805,32 @@ The byte-mode character count indicator is 8 bits for versions 1-9, so it is uni
 
 - [ ] **Step 1: Establish the golden fixture**
 
-The encoder needs a known-good target, and the project has no QR reference. Generate one **once** from an independent implementation, in the scratchpad so it never touches the repo as a dependency:
+The encoder needs a known-good target, and the project has no QR reference. Generate one **once** from an independent implementation, in the scratchpad so it never touches the repo as a dependency.
+
+Do not transcribe terminal block art by hand — hand-transcription of a 25x25 matrix is exactly the kind of step that silently introduces the bug you are trying to test for. Ask the reference library for its module bitmap directly:
 
 ```bash
 cd /private/tmp/claude-501/-Users-suryansh-Documents-Projects-Tracker-public/98442697-a2e3-4e7a-9f5b-94c8f2033322/scratchpad
-npx --yes qrcode --output-format=terminal "http://192.168.1.14:3000" > golden.txt
-cat golden.txt
+
+npx --yes -p qrcode node -e '
+const QR = require("qrcode");
+const text = "http://192.168.1.14:3000";
+const q = QR.create(text, { errorCorrectionLevel: "L" });
+const size = q.modules.size;
+const src = q.modules.data;
+const modules = [];
+for (let r = 0; r < size; r++) {
+  modules.push(Array.from({ length: size }, (_, c) => (src[r * size + c] ? 1 : 0)));
+}
+console.log(JSON.stringify({ text, version: q.version, modules }));
+' > golden.json
+
+node -e 'const g=require("./golden.json");console.log("version",g.version,"size",g.modules.length)'
 ```
 
-Scan `golden.txt` with a phone to confirm it resolves to the URL, then transcribe the module matrix into `test/fixtures/qr-golden.json` as `{ "text": "http://192.168.1.14:3000", "version": 2, "modules": [[0,1,...], ...] }` using 1 for dark.
+Confirm it reports `version 2 size 25`, then copy `golden.json` to `test/fixtures/qr-golden.json`.
 
-This fixture is committed and depended on forever; the `npx` tool is used once and never added to `package.json`.
+`QR.create()` returns the final masked matrix including all function patterns, which is exactly what `encodeQr` must reproduce. The fixture is committed and depended on forever; the `npx` tool runs once and never enters `package.json`.
 
 - [ ] **Step 2: Write the failing Galois field tests**
 
