@@ -36,6 +36,15 @@ test('frequency maps onto channel numbers, including the two irregular ones', ()
   assert.equal(frequencyToChannel(null), null);
 });
 
+test('frequencies in the 5925-5954 6GHz gap yield no channel, not a negative or zero one', () => {
+  // 6GHz channel 1 is centred at 5955 (5950 + 5*1); nothing below that is a
+  // real channel even though frequencyToBand still calls it 6GHz.
+  for (const mhz of [5925, 5940, 5949, 5950, 5954]) {
+    assert.equal(frequencyToChannel(mhz), null, `${mhz}MHz must not produce a channel`);
+  }
+  assert.equal(frequencyToBand(5950), '6GHz');
+});
+
 /* ---------- PHY mode ---------- */
 
 test('wifi standard codes map onto readable PHY modes', () => {
@@ -131,7 +140,9 @@ test('scan results map to the shape the daemon backends already return', () => {
     ok: true,
     results: [
       { ssid: 'FAR', bssid: 'aa:bb:cc:00:00:01', level: -81, frequency: 2412, capabilities: '[WPA2-PSK-CCMP][ESS]' },
-      { ssid: 'NEAR', bssid: 'aa:bb:cc:00:00:02', level: -42, frequency: 5180, capabilities: '[WPA3-SAE][ESS]' },
+      // Real ScanResult.capabilities for WPA3-SAE, per AOSP -- there is no
+      // "[WPA3-SAE]" flag anywhere in the platform.
+      { ssid: 'NEAR', bssid: 'aa:bb:cc:00:00:02', level: -42, frequency: 5180, capabilities: '[RSN-SAE-CCMP][ESS][MFPR][MFPC]' },
     ],
   });
 
@@ -143,7 +154,21 @@ test('scan results map to the shape the daemon backends already return', () => {
   assert.equal(mapped.networks[0].rssi, -42);
   assert.equal(mapped.networks[0].channel, 36);
   assert.equal(mapped.networks[0].band, '5GHz');
-  assert.equal(mapped.networks[0].security, 'WPA3-SAE');
+  // parseSecurity takes the first flag that isn't an infra marker
+  // (ESS/IBSS/WPS/RSN exactly) -- "RSN-SAE-CCMP" does not match that
+  // allowlist as a whole flag, so it is what the mapper actually returns.
+  assert.equal(mapped.networks[0].security, 'RSN-SAE-CCMP');
+});
+
+test('a scan result with a missing frequency yields no channel or band, not a fabricated one', () => {
+  const mapped = mapScanResults({
+    ok: true,
+    results: [
+      { ssid: 'NOFREQ', bssid: 'aa:bb:cc:00:00:04', level: -70, frequency: null, capabilities: '[ESS]' },
+    ],
+  });
+  assert.equal(mapped.networks[0].channel, null);
+  assert.equal(mapped.networks[0].band, null);
 });
 
 test('a hidden network keeps its bssid and reports a null ssid', () => {

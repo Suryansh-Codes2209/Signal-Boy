@@ -9,7 +9,7 @@ import { serveStatic, sendJson, openEventStream } from './http.js';
 import { platformInfo, hostPlatformId } from './platform/index.js';
 import { readWifi, scanAccessPoints, startWifiPolling } from './sensors/wifi.js';
 import { Kalman1D, Ewma } from '../public/js/core/filter.js';
-import { gradeRssi, qualityPercent } from '../public/js/core/pathloss.js';
+import { applyFilters } from '../public/js/core/derive.js';
 import { ensureCert, CERT_DIR } from './tls.js';
 import { encodeQr } from './qr/index.js';
 import { renderQr } from './qr/terminal.js';
@@ -29,30 +29,9 @@ const ewma = new Ewma(0.3);
 let latestWifi = null;
 
 function onWifiReading(result) {
-  if (!result.ok) {
-    kalman.reset();
-    ewma.reset();
-    latestWifi = result;
-    publish('wifi', result);
-    return;
-  }
-
-  const filtered = kalman.update(result.rssi);
-  const smoothed = ewma.update(result.rssi);
-  const grade = gradeRssi(filtered);
-
-  latestWifi = {
-    ...result,
-    filtered,
-    smoothed,
-    // Named qualityBand, not band: `band` already means the radio frequency
-    // band (2.4/5/6GHz) on the reading and must not be clobbered.
-    qualityBand: grade?.key ?? null,
-    bandLabel: grade?.label ?? null,
-    shade: grade?.shade ?? 0,
-    quality: qualityPercent(filtered),
-    variance: kalman.variance,
-  };
+  // Same pipeline the APK runs locally in public/js/sources/native.js -- moved
+  // to core/derive.js so tuning it once tunes it for both.
+  latestWifi = applyFilters(result, { kalman, ewma });
   publish('wifi', latestWifi);
 }
 

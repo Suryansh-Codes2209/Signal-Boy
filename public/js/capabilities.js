@@ -87,6 +87,11 @@ export function clientProfile() {
   return {
     platform,
     features: detectClientFeatures(),
-    isHostMachine: isLocalHost(),
+    // isLocalHost() alone is not enough: the APK loads the UI from
+    // https://appassets.androidplatform.net/, not localhost, even though the
+    // phone running it IS the device doing the sensing. Without this, the
+    // platform view would tell the user their own reading came from "the
+    // daemon host" -- a different machine that does not exist in the APK.
+    isHostMachine: isLocalHost() || platform === 'androidApp',
   };
 }

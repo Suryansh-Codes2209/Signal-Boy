@@ -43,7 +43,9 @@ export function frequencyToChannel(mhz) {
   if (mhz === 5935) return 2;
   if (mhz >= 2401 && mhz <= 2483) return Math.round((mhz - 2407) / 5);
   if (mhz >= 5150 && mhz <= 5895) return Math.round((mhz - 5000) / 5);
-  if (mhz >= 5925 && mhz <= 7125) return Math.round((mhz - 5950) / 5);
+  // 5925-5954 is a real 6GHz gap: channel 1 is centred at 5955, so a >=5950
+  // guard would still be wrong -- 5950 itself yields channel 0, not a channel.
+  if (mhz >= 5955 && mhz <= 7125) return Math.round((mhz - 5950) / 5);
   return null;
 }
 

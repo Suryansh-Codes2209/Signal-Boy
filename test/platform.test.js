@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readdirSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 import {
   PLATFORMS,
@@ -69,7 +72,7 @@ test('unsupported capabilities explain themselves', () => {
   }
 });
 
-test('only host platforms can run the daemon', () => {
+test('only host platforms measure their own signal locally', () => {
   const ids = hostPlatforms().map((p) => p.id).sort();
   assert.deepEqual(ids, ['androidApp', 'darwin', 'linux', 'win32']);
   assert.equal(PLATFORMS.android.role, ROLE.GUEST);
@@ -317,4 +320,23 @@ test('splitTerse preserves escaped colons inside BSSIDs', () => {
 test('splitTerse handles empty fields', () => {
   assert.deepEqual(splitTerse('a::c'), ['a', '', 'c']);
   assert.deepEqual(splitTerse(''), ['']);
+});
+
+/* ---------- public/js/core stays browser-safe ---------- */
+
+test('public/js/core has no Node-only code', () => {
+  // The entire host/guest split rests on these modules being loadable in a
+  // plain browser and in the Android WebView, neither of which has Node
+  // builtins. Nothing else enforces that -- this is the tripwire for someone
+  // later reaching for process.platform or a node: import inside core/.
+  const coreDir = join(dirname(fileURLToPath(import.meta.url)), '../public/js/core');
+  const files = readdirSync(coreDir).filter((f) => f.endsWith('.js'));
+  assert.ok(files.length > 0, 'expected to find source files under public/js/core');
+
+  for (const file of files) {
+    const source = readFileSync(join(coreDir, file), 'utf8');
+    assert.doesNotMatch(source, /from\s+['"]node:/, `${file} imports a node: module`);
+    assert.doesNotMatch(source, /\brequire\(/, `${file} calls require(...)`);
+    assert.doesNotMatch(source, /\bprocess\./, `${file} references process.*`);
+  }
 });

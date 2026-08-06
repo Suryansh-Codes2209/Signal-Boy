@@ -20,9 +20,13 @@ export const SUPPORT = {
 };
 
 /**
- * Devices that can run the Signal Boy daemon (host) vs. devices that can only
- * open the UI in a browser (guest). Guests still see all host sensor data over
- * the network -- the split only governs which sensors run locally.
+ * Devices that measure their own WiFi signal locally (host) vs. devices that
+ * can only open the UI and read someone else's measurements over the network
+ * (guest). Originally this meant "runs the Node daemon", but androidApp is a
+ * host with no Node runtime at all -- WifiManager reads the radio directly, in
+ * process, instead of shelling out the way the desktop backends do. Guests
+ * still see all host sensor data over the network -- the split only governs
+ * which sensors run locally.
  */
 export const ROLE = { HOST: 'host', GUEST: 'guest' };
 
@@ -171,7 +175,7 @@ export const PLATFORMS = {
         support: SUPPORT.FULL,
         exact: true,
         via: 'WifiManager.getScanResults()',
-        detail: 'Exact dBm per access point, unlike netsh. Hard-throttled to 4 scans per 2 minutes, so the list is refreshed on demand rather than live.',
+        detail: 'Exact dBm per access point, unlike netsh. Hard-throttled to 4 scans per 2 minutes, so the list is refreshed on demand rather than live. API 33+ scans under NEARBY_WIFI_DEVICES (declared neverForLocation), no location grant needed; API 32 and below need ACCESS_FINE_LOCATION.',
       },
       ssidVisible: {
         support: SUPPORT.PARTIAL,
@@ -181,8 +185,14 @@ export const PLATFORMS = {
       lanScan: { support: SUPPORT.NONE, detail: 'No Node runtime in the APK; raw sockets are unavailable to a WebView.' },
       mdns: { support: SUPPORT.NONE, detail: 'No Node runtime in the APK.' },
       bleScan: { support: SUPPORT.NONE, detail: 'Not wired up. The APK ships WiFi sensing only.' },
-      camera: { support: SUPPORT.FULL, detail: 'Rear camera, unlike a laptop webcam.' },
-      magnetometer: { support: SUPPORT.FULL, detail: 'Phones carry a real magnetometer.' },
+      camera: {
+        support: SUPPORT.NONE,
+        detail: 'getUserMedia needs android.permission.CAMERA plus a WebChromeClient.onPermissionRequest handler. Neither is planned; the APK ships WiFi sensing only.',
+      },
+      magnetometer: {
+        support: SUPPORT.PARTIAL,
+        detail: 'The Magnetometer API is behind a Chrome flag and is not exposed in a WebView by default, same as the android (browser) entry on the same handset.',
+      },
     },
   },
 };
@@ -224,7 +234,7 @@ export function supports(platformId, key) {
   return capability(platformId, key).support !== SUPPORT.NONE;
 }
 
-/** Host platforms only -- the ones that can actually run the daemon. */
+/** Host platforms only -- the ones that measure their own WiFi signal locally. */
 export function hostPlatforms() {
   return Object.values(PLATFORMS).filter((p) => p.role === ROLE.HOST);
 }

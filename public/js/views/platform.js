@@ -167,7 +167,7 @@ function renderIdentity(platform, client) {
   const { features } = client;
   const rows = [
     ['DAEMON HOST', `${platform.label}${platform.forced ? ' (FORCED)' : ''}`],
-    ['THIS DEVICE', client.isHostMachine ? 'SAME MACHINE' : client.platform.toUpperCase()],
+    ['THIS DEVICE', client.isHostMachine ? 'SAME MACHINE' : (platform.platforms[client.platform]?.label ?? client.platform.toUpperCase())],
     ['SECURE CONTEXT', features.secureContext ? 'YES' : 'NO'],
     ['WEB BLUETOOTH', features.bluetoothLeScan ? 'SCAN OK' : features.webBluetooth ? 'LIMITED' : 'NO'],
     ['CAMERA', features.camera ? 'YES' : 'NO'],

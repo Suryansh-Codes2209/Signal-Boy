@@ -1,5 +1,3 @@
-export * from '../../public/js/core/platforms.js';
-
 /**
  * Host platform detection.
  *

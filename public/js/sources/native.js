@@ -1,6 +1,6 @@
 import { mapConnected, mapScanResults } from './android-map.js';
 import { Kalman1D, Ewma } from '../core/filter.js';
-import { gradeRssi, qualityPercent } from '../core/pathloss.js';
+import { applyFilters } from '../core/derive.js';
 import { PLATFORMS, capabilityMatrix } from '../core/platforms.js';
 
 /**
@@ -28,40 +28,6 @@ function parse(json, fallback = null) {
   } catch {
     return fallback;
   }
-}
-
-/**
- * Runs the same filter-and-grade pipeline server/index.js applies to daemon
- * readings, so an Android reading carries identical derived fields.
- *
- * A failed reading resets both filters rather than being fed through them --
- * otherwise the estimate would resume from wherever it sat when the radio
- * dropped, and the first reading after reconnecting would be a lie about how
- * quickly the signal recovered.
- */
-export function applyFilters(reading, { kalman, ewma }) {
-  if (!reading.ok) {
-    kalman.reset();
-    ewma.reset();
-    return reading;
-  }
-
-  const filtered = kalman.update(reading.rssi);
-  const smoothed = ewma.update(reading.rssi);
-  const grade = gradeRssi(filtered);
-
-  return {
-    ...reading,
-    filtered,
-    smoothed,
-    // Named qualityBand, not band: `band` already means the radio frequency
-    // band (2.4/5/6GHz) on the reading and must not be clobbered.
-    qualityBand: grade?.key ?? null,
-    bandLabel: grade?.label ?? null,
-    shade: grade?.shade ?? 0,
-    quality: qualityPercent(filtered),
-    variance: kalman.variance,
-  };
 }
 
 export function createNativeSource(bridge, scope = globalThis) {
@@ -141,7 +107,19 @@ export function createNativeSource(bridge, scope = globalThis) {
       try {
         return mapScanResults(parse(bridge.scan(), { ok: false, error: 'BRIDGE RETURNED NOTHING' }));
       } catch (err) {
-        return { ok: false, supported: true, networks: [], error: err.message };
+        // Broad on purpose: this call crosses into Kotlin over the JS bridge,
+        // which can fail in ways a JS catch cannot enumerate in advance (a
+        // missing method, a thrown WebView exception, malformed JSON). Every
+        // other exit path goes through mapScanResults, so this one carries
+        // the same shape by hand rather than inventing a shorter one.
+        return {
+          ok: false,
+          supported: true,
+          networks: [],
+          error: err.message,
+          source: 'WifiManager.getScanResults()',
+          exact: true,
+        };
       }
     },
 
