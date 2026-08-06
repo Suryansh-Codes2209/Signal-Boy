@@ -1,7 +1,8 @@
 import * as darwin from './wifi/darwin.js';
 import * as win32 from './wifi/win32.js';
 import * as linux from './wifi/linux.js';
-import { PLATFORMS, detectHostPlatform, capabilityMatrix } from './capabilities.js';
+import { PLATFORMS, capabilityMatrix } from '../../public/js/core/platforms.js';
+import { detectHostPlatform } from './capabilities.js';
 
 /**
  * Resolves which OS backend to use.

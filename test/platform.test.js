@@ -9,9 +9,9 @@ import {
   capability,
   supports,
   capabilityMatrix,
-  detectHostPlatform,
   hostPlatforms,
-} from '../server/platform/capabilities.js';
+} from '../public/js/core/platforms.js';
+import { detectHostPlatform } from '../server/platform/capabilities.js';
 import {
   percentToDbm,
   dbmToPercent,
