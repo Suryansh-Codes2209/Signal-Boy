@@ -378,3 +378,49 @@ the constraint this work exists to remove.
 
 **A PWA or Trusted Web Activity.** Neither can reach `WifiManager`. No amount of
 web packaging changes what the browser sandbox exposes.
+
+---
+
+## Amendment 2026-08-07 — Bluetooth hunting and audio feedback
+
+### Bluetooth
+
+The APK scans BLE advertisements and lists devices by RSSI, so you can walk a
+device down. `BluetoothLeScanner` reports continuously with **no throttle**,
+unlike WiFi's 4-scans-per-2-minutes — which is what makes real-time hunting
+possible at all.
+
+**BLE only. Classic Bluetooth discovery is out of scope:** it reports RSSI once
+at discovery time and takes ~12s per sweep, so it cannot drive a live readout.
+
+Honest limits, which the UI must state rather than imply away:
+
+- BLE finds devices that **advertise**. Hidden cameras are overwhelmingly WiFi
+  devices and appear in the NEARBY view instead. The hidden-device story is the
+  two views together, not Bluetooth alone.
+- Modern trackers **rotate their MAC address** (~15 min) specifically to defeat
+  this. A device is followable within that window, not across a long hunt.
+- **No distance, ever.** `pathloss.js` is calibrated for WiFi; BLE transmit
+  power varies wildly by device, so metres would be fabricated. Hot/cold by
+  RSSI only.
+
+Permissions: `BLUETOOTH_SCAN` with `neverForLocation` (API 31+),
+`BLUETOOTH_CONNECT` for device names. A denial must not block the WiFi meter.
+
+Kotlin stays dumb: it forwards raw `ScanResult` fields and the JS side maps them,
+exactly as `android-map.js` does for WiFi.
+
+### Audio
+
+A square-wave tone whose pitch tracks the filtered RSSI of whatever is selected —
+the connected WiFi network, or a chosen BLE device. Off by default.
+
+- **Square wave is deliberate**: it is the Game Boy DMG voice, the same argument
+  as the four-colour palette.
+- **Map dBm to semitones, not to raw hertz.** Pitch perception is logarithmic;
+  mapping straight to Hz crams the useful range into a squeak at one end.
+- **Drive from the Kalman-filtered value**, never raw, or it warbles unusably.
+- A metal-detector click-rate mode behind the same toggle. Rate is easier to
+  read while moving because it needs no reference tone.
+
+Web Audio requires a user gesture to start, so the toggle doubles as the unlock.
