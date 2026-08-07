@@ -81,9 +81,14 @@ function parseSecurity(capabilities) {
 }
 
 export function mapConnected(raw) {
-  // WifiManager reports rssi -127 with networkId -1 when the radio is on but
-  // not associated. Reporting that as a reading would draw a real-looking bar.
-  if (!raw || raw.networkId === -1 || raw.rssi == null || raw.rssi <= -127) {
+  // WifiInfo.getNetworkId() is not read by the bridge at all: for any app
+  // targeting API 33+ it unconditionally returns INVALID_NETWORK_ID (-1),
+  // whether or not the radio is actually associated. Keying "not connected"
+  // off that field would report every reading as disconnected forever on a
+  // modern targetSdk -- this happened once already, do not reintroduce it.
+  // Association instead comes from ConnectivityManager as raw.connected, with
+  // the rssi sentinel (-127, WifiInfo.INVALID_RSSI) kept as a second guard.
+  if (!raw || raw.connected === false || raw.rssi == null || raw.rssi <= -127) {
     return { ok: false, error: 'NOT CONNECTED TO A NETWORK', platform: 'androidApp' };
   }
 

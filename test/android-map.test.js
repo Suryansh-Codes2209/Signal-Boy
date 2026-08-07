@@ -79,13 +79,13 @@ test('the redacted bssid becomes null rather than a fake address', () => {
 /* ---------- connected reading ---------- */
 
 const RAW_CONNECTED = {
+  connected: true,
   rssi: -58,
   frequency: 5180,
   linkSpeed: 780,
   ssid: '"HOME-5G"',
   bssid: 'a4:2b:8c:00:11:22',
   wifiStandard: 6,
-  networkId: 1,
 };
 
 test('a connected reading produces every key of the canonical shape', () => {
@@ -127,10 +127,26 @@ test('a denied location permission redacts identity but keeps the signal', () =>
 });
 
 test('a disconnected radio is a failure, not a zero reading', () => {
-  // WifiManager reports -127 and networkId -1 when not associated.
-  const mapped = mapConnected({ rssi: -127, networkId: -1, frequency: -1 });
+  // WifiManager reports rssi -127 when not associated; the bridge separately
+  // reports connected: false via ConnectivityManager. Either guard alone
+  // must be enough to fail the reading.
+  const mapped = mapConnected({ connected: false, rssi: -127, frequency: -1 });
   assert.equal(mapped.ok, false);
   assert.match(mapped.error, /NOT CONNECTED/i);
+});
+
+// Regression guard: WifiInfo.getNetworkId() always returns INVALID_NETWORK_ID
+// (-1) for apps targeting API 33+, regardless of actual association. An
+// earlier version of mapConnected() keyed "not connected" off that field,
+// which meant every reading on a modern targetSdk reported disconnected
+// forever even with a real, valid RSSI. The bridge no longer sends
+// networkId at all -- this asserts a good reading maps to ok: true on its
+// own, with nothing named networkId anywhere in the input.
+test('a connected reading maps to ok: true even with no networkId field present', () => {
+  const mapped = mapConnected({ ...RAW_CONNECTED, connected: true });
+  assert.ok(!('networkId' in RAW_CONNECTED), 'fixture must not carry networkId');
+  assert.equal(mapped.ok, true);
+  assert.equal(mapped.rssi, -58);
 });
 
 /* ---------- scan results ---------- */

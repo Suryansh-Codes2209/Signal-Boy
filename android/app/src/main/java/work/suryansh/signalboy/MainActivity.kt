@@ -1,6 +1,8 @@
 package work.suryansh.signalboy
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.WindowManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -23,6 +25,12 @@ import androidx.webkit.WebViewAssetLoader
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
+    private val handler = Handler(Looper.getMainLooper())
+    private lateinit var bridge: WifiBridge
+    private var pushing = false
+
+    /** Matches SIGNALBOY_WIFI_INTERVAL's default in the daemon. */
+    private val intervalMs = 1000
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,14 +66,52 @@ class MainActivity : AppCompatActivity() {
                     view: WebView,
                     request: WebResourceRequest,
                 ): WebResourceResponse? = loader.shouldInterceptRequest(request.url)
+
+                override fun onPageFinished(view: WebView, url: String) {
+                    startPushing()
+                }
             }
         }
+
+        bridge = WifiBridge(this, intervalMs) { requestWifiPermissions() }
+        webView.addJavascriptInterface(bridge, "SignalBoyNative")
 
         setContentView(webView)
         webView.loadUrl("https://appassets.androidplatform.net/www/index.html")
     }
 
+    /**
+     * Kotlin owns the cadence and pushes, rather than JavaScript polling across
+     * the bridge. That mirrors the daemon's server-push SSE shape, so the JS
+     * side sees the same event flow either way.
+     */
+    private fun startPushing() {
+        if (pushing) return
+        pushing = true
+
+        val tick = object : Runnable {
+            override fun run() {
+                val json = bridge.readConnected()
+                webView.evaluateJavascript("window.__signalboyPush($json)", null)
+                handler.postDelayed(this, intervalMs.toLong())
+            }
+        }
+        handler.post(tick)
+    }
+
+    /**
+     * Stub until Task 9 wires up the real ACCESS_FINE_LOCATION request flow.
+     * requestPermissions() on the JS side already calls into this method, so it
+     * must exist now even though it does nothing yet -- adding the actual
+     * request here would be scope creep for this task, whose only job is
+     * getting a raw RSSI value across the bridge.
+     */
+    private fun requestWifiPermissions() {
+        // Intentionally no-op: see Task 9.
+    }
+
     override fun onDestroy() {
+        handler.removeCallbacksAndMessages(null)
         webView.destroy()
         super.onDestroy()
     }

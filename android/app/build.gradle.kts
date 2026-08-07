@@ -10,6 +10,23 @@ val packageVersion: String = File(rootDir.parentFile, "package.json")
     .readText()
     .let { Regex("\"version\"\\s*:\\s*\"([^\"]+)\"").find(it)!!.groupValues[1] }
 
+/**
+ * versionCode must be a single monotonically increasing integer, but
+ * package.json carries a semver string. Requiring exactly three numeric
+ * segments and failing loudly on anything else (a `-beta` suffix, a
+ * two-segment version) beats letting NumberFormatException surface from deep
+ * inside `.toInt()` with no indication of which file or value caused it.
+ */
+fun versionCodeFrom(version: String): Int {
+    val segments = version.split(".")
+    require(segments.size == 3 && segments.all { it.toIntOrNull() != null }) {
+        "versionCode requires a three-part numeric version (major.minor.patch); " +
+            "package.json has \"$version\", which does not fit that shape."
+    }
+    val (major, minor, patch) = segments.map { it.toInt() }
+    return major * 10000 + minor * 100 + patch
+}
+
 android {
     namespace = "work.suryansh.signalboy"
     compileSdk = 36
@@ -19,9 +36,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionName = packageVersion
-        versionCode = packageVersion.split(".").let {
-            it[0].toInt() * 10000 + it[1].toInt() * 100 + it[2].toInt()
-        }
+        versionCode = versionCodeFrom(packageVersion)
     }
 
     buildTypes {
@@ -55,8 +70,16 @@ android {
 /**
  * The UI is not vendored into the Android project -- it is copied from public/
  * at build time, so the APK can never drift from what `npx signalboy` serves.
+ *
+ * Sync, not Copy: Copy only deletes stale outputs it remembers creating in
+ * Gradle's own task history. If that history goes missing independently of
+ * the destination -- a wiped .gradle/, or a CI cache that restores
+ * assets/www/ from a cache entry without restoring the history alongside it
+ * -- a file removed from public/ lingers in assets/www/ and still ships in
+ * the APK. Sync mirrors the destination to the source unconditionally on
+ * every run, so a deleted source file cannot survive a build.
  */
-val syncWebAssets by tasks.registering(Copy::class) {
+val syncWebAssets by tasks.registering(Sync::class) {
     from(File(rootDir.parentFile, "public"))
     into(layout.projectDirectory.dir("src/main/assets/www"))
 }

@@ -3,6 +3,9 @@
 
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <!-- ConnectivityManager.getActiveNetwork(), used to read a raw connected
+         boolean without relying on WifiInfo.getNetworkId() (see WifiBridge). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- Android classifies WiFi identity as location data. Needed for SSID and
          BSSID, and for scan results up to API 32. -->
