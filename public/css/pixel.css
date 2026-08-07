@@ -508,9 +508,17 @@ canvas {
 .ap {
   display: grid;
   grid-template-columns: var(--u) 1fr auto;
+  /* BSSID gets a full-width row of its own rather than sharing the `auto`
+     column with RSSI. That column used to size to whichever was widest
+     across BOTH rows it appeared in -- a ~17-character BSSID -- which starved
+     the `1fr` column shared by SSID and meta and forced the browser to break
+     inside ordinary tokens ("CH 9", "WPA2-PSK-CCMP") at phone width. Putting
+     BSSID on its own row removes it from that width calculation entirely. Do
+     not compact this back into the rssi row. */
   grid-template-areas:
     'swatch ssid rssi'
-    'swatch meta bssid';
+    'swatch meta meta'
+    'swatch bssid bssid';
   gap: 0 var(--u);
   align-items: center;
   border: var(--border) solid var(--lcd-0);
@@ -521,4 +529,6 @@ canvas {
 .ap-ssid   { grid-area: ssid; }
 .ap-rssi   { grid-area: rssi; }
 .ap-meta   { grid-area: meta; color: var(--lcd-1); }
-.ap-bssid  { grid-area: bssid; color: var(--lcd-1); text-align: right; }
+/* De-emphasised: it earns its own line (two networks can share an SSID, and
+   this is the only thing telling them apart) but not a column beside dBm. */
+.ap-bssid  { grid-area: bssid; color: var(--lcd-1); }

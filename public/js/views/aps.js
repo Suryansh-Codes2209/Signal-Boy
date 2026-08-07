@@ -21,10 +21,13 @@ export function createApsView(root, context) {
   const unsupported = support.support === 'none';
 
   const button = el('button', { class: 'btn', type: 'button', text: 'SCAN' });
+  // Plain readout, not `.note` -- `.note` means an advisory caveat elsewhere in
+  // this app (filled background, left accent) and the count is neither.
+  const count = el('span', { class: 'aps-count' });
   const note = el('p', { class: 'note', role: 'status', 'aria-live': 'polite' });
   const list = el('div', { class: 'aps-list' });
 
-  root.append(el('div', { class: 'aps' }, el('div', { class: 'aps-bar' }, button, note), list));
+  root.append(el('div', { class: 'aps' }, el('div', { class: 'aps-bar' }, button, count, note), list));
 
   if (unsupported) {
     button.disabled = true;
@@ -39,15 +42,21 @@ export function createApsView(root, context) {
     clear(list);
 
     if (!result.ok) {
+      count.textContent = '';
       note.textContent = result.error ?? 'SCAN FAILED.';
       return;
     }
     if (!result.networks.length) {
+      count.textContent = '';
       note.textContent = 'NO NETWORKS VISIBLE.';
       return;
     }
 
-    note.textContent = `${result.networks.length} NETWORKS${result.exact ? '' : ' (APPROXIMATE DBM)'}`;
+    // The count is a plain readout, not a caveat -- see the comment where
+    // `note`/`count` are created. Clear `note` so a stale error/empty message
+    // doesn't linger next to a now-successful list.
+    count.textContent = `${result.networks.length} NETWORKS${result.exact ? '' : ' (APPROXIMATE DBM)'}`;
+    note.textContent = '';
 
     for (const n of result.networks) {
       const grade = gradeRssi(n.rssi);
@@ -58,7 +67,18 @@ export function createApsView(root, context) {
           el('span', { class: 'ap-swatch', style: `background:${shadeColor(grade?.shade ?? 0)}` }),
           el('span', { class: 'ap-ssid', text: n.ssid ?? 'HIDDEN' }),
           el('span', { class: 'ap-rssi', text: n.rssi == null ? 'N/A' : `${result.exact ? '' : '~'}${n.rssi} DBM` }),
-          el('span', { class: 'ap-meta', text: [n.band, n.channel != null ? `CH ${n.channel}` : null, n.security].filter(Boolean).join(' · ') }),
+          // A non-breaking space glues "CH" to its number, and non-breaking
+          // hyphens hold security strings like "WPA2-PSK-CCMP" together --
+          // both are single tokens that must never split mid-word at phone
+          // width (see the layout fix note on `.ap` in pixel.css).
+          el('span', {
+            class: 'ap-meta',
+            text: [n.band, n.channel != null ? `CH ${n.channel}` : null, n.security?.replace(/-/g, '‑')]
+              .filter(Boolean)
+              .join(' · '),
+          }),
+          // BSSID gets its own row (see pixel.css) so it earns a line, not a
+          // column beside the dBm -- see `.ap` for why.
           el('span', { class: 'ap-bssid', text: n.bssid ?? '' }),
         ),
       );
@@ -81,7 +101,11 @@ export function createApsView(root, context) {
       note.textContent = err.message.toUpperCase();
     } finally {
       scanning = false;
-      button.disabled = retryUntil > Date.now();
+      const throttled = retryUntil > Date.now();
+      button.disabled = throttled;
+      // Set together with `disabled` so the button never reads "SCAN" for up
+      // to a second while already unclickable, waiting on the next tick below.
+      button.textContent = throttled ? `THROTTLED · ${Math.ceil((retryUntil - Date.now()) / 1000)}S` : 'SCAN';
     }
   }
 
@@ -91,7 +115,7 @@ export function createApsView(root, context) {
   // looking at the same daemon stay in step.
   context.source.on('aps', render);
 
-  const timer = setInterval(() => {
+  setInterval(() => {
     if (!retryUntil) return;
     const left = retryUntil - Date.now();
     if (left > 0) {
@@ -103,7 +127,6 @@ export function createApsView(root, context) {
     button.disabled = false;
     button.textContent = 'SCAN';
   }, TICK_MS);
-  timer.unref?.();
 
   return {};
 }
