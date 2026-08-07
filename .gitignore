@@ -10,3 +10,6 @@ cert.json
 .vercel/
 .idea/
 .vscode/
+
+# Copied from public/ at build time by android/app/build.gradle.kts
+android/app/src/main/assets/www/

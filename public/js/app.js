@@ -5,6 +5,8 @@ import { createCompanion } from './companion.js';
 import { createLiveView } from './views/live.js';
 import { createPlatformView } from './views/platform.js';
 import { createWalkView } from './views/walk.js';
+import { createApsView } from './views/aps.js';
+import { createBleView } from './views/ble.js';
 
 /**
  * Application shell: fetches platform info, registers views and routes the
@@ -17,6 +19,8 @@ import { createWalkView } from './views/walk.js';
 const VIEWS = [
   { id: 'walk', label: 'WALK', create: createWalkView },
   { id: 'live', label: 'LIVE', create: createLiveView },
+  { id: 'aps', label: 'NEARBY', create: createApsView },
+  { id: 'ble', label: 'HUNT', create: createBleView },
   { id: 'platform', label: 'PLATFORM', create: createPlatformView },
 ];
 
@@ -41,6 +45,7 @@ function setConnectionState(next) {
 
 function mount(id) {
   if (state.active === id) return;
+  const previous = state.active;
   state.active = id;
 
   for (const [viewId, entry] of state.views) {
@@ -50,6 +55,12 @@ function mount(id) {
     tab.setAttribute('aria-selected', String(tab.dataset.view === id));
   }
   location.hash = id;
+
+  // Optional lifecycle: only HUNT uses it today, to stop its BLE scan the
+  // moment it is not the tab on screen. Every other view's api has neither
+  // method, so both calls are no-ops there.
+  if (previous) state.views.get(previous)?.api.onHide?.();
+  state.views.get(id)?.api.onShow?.();
 }
 
 function buildTabs() {

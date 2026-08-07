@@ -119,16 +119,59 @@ The certificate is reused across restarts, and regenerated automatically when yo
 
 Requires the `openssl` CLI, which macOS and Linux ship by default and Git for Windows provides on Windows.
 
+## Android
+
+```
+Download the APK from the landing page: https://signalboy.suryansh.work
+```
+
+On Android the browser limitation above does not apply. The app is a native
+shell around the same UI, and it reads `WifiManager` directly, so the phone
+measures its own signal — the number describes where you are standing, not
+where a laptop is sitting. It needs no daemon, no laptop, and no network.
+
+It is also the only platform here that scans neighbouring access points with
+exact per-AP dBm, not a converted percentage. The trade is that Android
+exposes no noise floor, so SNR is unavailable, and the OS throttles scans to
+four per two minutes, so the NEARBY list refreshes on demand rather than
+live.
+
+Signal strength needs no permission at all. The network name and the nearby
+list do — Android classifies WiFi identity as location data — and the app
+asks only when you open something that needs it. Deny it and the meter still
+works.
+
+A third tab, HUNT, scans for nearby Bluetooth Low Energy devices and lets you
+lock onto one to track by an audio tone (pitch, or a metal-detector click
+rate) and a proximity radar built from the same RSSI. It finds devices that
+**advertise** — it cannot see one that stays silent — and it shows no
+distance and no direction, ever: a BLE advertisement carries an RSSI and,
+sometimes, a claimed transmit power, and neither is enough to convert to
+metres through walls and furniture. Treat rising RSSI as "closer" and falling
+as "farther," nothing more precise than that. A hidden camera is far more
+likely to show up in the NEARBY WiFi list than in HUNT — most stream over
+WiFi, not BLE — and a device with no radio at all is invisible to both tabs.
+Modern trackers (AirTag-class) also rotate their advertised MAC address every
+roughly 15 minutes, so a HUNT session that runs longer than that may see the
+same physical device reappear as a new entry.
+
+iPhone has no equivalent and never will: Apple exposes no public API for
+WiFi signal strength. On iOS, walk mode over the LAN (above) remains the way
+to carry the number around.
+
+Installing the APK requires allowing installs from your browser once — the
+app is not distributed through the Play Store.
+
 ## What works where
 
 Capabilities differ sharply by OS, and they do **not** form a hierarchy — Windows sees every nearby access point while macOS refuses to.
 
-| | macOS | Windows | Linux |
-|---|---|---|---|
-| Own signal (dBm) | yes, exact | yes, approximate on older builds | yes, exact |
-| Scan neighbouring APs | **no** | yes, full | partial, via NetworkManager |
-| See your own SSID | **no** | yes | yes |
-| Noise floor / SNR | yes | no | driver-dependent |
+| | macOS | Windows | Linux | Android app |
+|---|---|---|---|---|
+| Own signal (dBm) | yes, exact | yes, approximate on older builds | yes, exact | yes, exact |
+| Scan neighbouring APs | **no** | yes, full | partial, via NetworkManager | yes, full |
+| See your own SSID | **no** | yes | yes | yes, with permission |
+| Noise floor / SNR | yes | no | driver-dependent | **no** |
 
 **macOS** removed the `airport` CLI in 14.4 and reclassified WiFi metadata as location data. `system_profiler` still reports your connected network's signal and noise without sudo, which is enough to survey your own network, but neighbouring SSIDs come back `<redacted>` with no signal values.
 

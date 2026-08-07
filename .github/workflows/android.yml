@@ -1,0 +1,58 @@
+name: android
+
+# workflow_dispatch lets the signing + build path be exercised on demand,
+# without cutting a v* tag just to find out the keystore secrets are wired up
+# correctly. The release-upload step below still only fires for a tag push.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Restore the signing keystore
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.jks"
+
+      # Env var names here must match android/app/build.gradle.kts exactly --
+      # it reads SIGNALBOY_KEYSTORE / _KEYSTORE_PASSWORD / _KEY_ALIAS /
+      # _KEY_PASSWORD directly from the environment, with no fallback. A
+      # mismatch here builds an unsigned APK silently rather than failing.
+      - name: Build the signed release APK
+        working-directory: android
+        env:
+          SIGNALBOY_KEYSTORE: ${{ runner.temp }}/release.jks
+          SIGNALBOY_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          SIGNALBOY_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          SIGNALBOY_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease
+
+      # A fixed asset name is what makes releases/latest/download/signalboy.apk
+      # a stable link, so the landing page never needs redeploying per release.
+      - name: Name the artifact predictably
+        run: cp android/app/build/outputs/apk/release/app-release.apk signalboy.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: signalboy.apk
+          path: signalboy.apk
+
+      # softprops/action-gh-release only runs meaningfully on a tag push -- on
+      # a tag-less run (workflow_dispatch) it has no release to attach to, so
+      # this step is skipped rather than failing the whole run.
+      - name: Attach the APK to the GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: signalboy.apk

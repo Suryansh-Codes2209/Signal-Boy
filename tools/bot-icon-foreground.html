@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Signal Boy — adaptive icon foreground</title>
+    <!--
+      Source for tools/bot-icon-foreground.png: the Android adaptive icon's
+      foreground layer.
+
+      Reuses the same PixelBot render as tools/bot-icon.html (happy, 4 bars --
+      see that file's comment for why) and then only RECOLOURS pixels already
+      drawn by the renderer -- it never draws a shape of its own. The renderer
+      always paints its own background first (PALETTE[3], the LCD colour), so
+      that fill is used as a chroma key: any pixel matching it becomes
+      transparent, and every remaining pixel (outline, face, body -- whatever
+      shade the renderer used) is flattened to PALETTE[0] (--lcd-0). The result
+      is a dark silhouette on transparency, which is what an adaptive-icon
+      foreground layer needs.
+
+      Safe zone: an adaptive icon's foreground is a 108dp canvas, but the
+      launcher masks away everything outside the centre 72dp -- only that
+      middle two-thirds is guaranteed visible on every device shape (circle,
+      squircle, rounded square...). The bot is rendered at scale 12 (288px,
+      exactly 2/3 of the 432px output) and centred with a 72px transparent
+      margin on every side, so the head and antenna survive the mask instead
+      of being clipped into a circle.
+
+      432 = 108dp * 4x (xxxhdpi), the highest density mipmap bucket needed;
+      sips downsamples this one master to the other four buckets, same as
+      tools/og-card.html's pattern of one generator feeding a raster asset.
+
+      Regenerate with (needs a transparent screenshot backdrop, or the PNG
+      comes back opaque white; needs file-access-from-files for the module
+      import, same as bot-icon.html):
+
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+          --headless --disable-gpu --hide-scrollbars \
+          --allow-file-access-from-files --default-background-color=00000000 \
+          --force-device-scale-factor=1 --window-size=432,432 \
+          --screenshot=tools/bot-icon-foreground.png \
+          tools/bot-icon-foreground.html
+    -->
+    <style>
+      html, body { margin: 0; background: transparent; }
+      canvas { display: block; }
+    </style>
+  </head>
+  <body>
+    <canvas id="out" width="432" height="432"></canvas>
+    <script type="module">
+      import { PixelBot, MOODS } from '../public/js/render/bot.js';
+      import { PALETTE } from '../public/js/render/palette.js';
+
+      const CANVAS_SIZE = 432; // 108dp @ xxxhdpi (4x)
+      const SAFE_SIZE = 288; // 72dp @ xxxhdpi -- the guaranteed-visible 2/3
+      const PAD = (CANVAS_SIZE - SAFE_SIZE) / 2;
+
+      const parseHex = (hex) => {
+        const n = parseInt(hex.slice(1), 16);
+        return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
+      };
+      const BG = parseHex(PALETTE[3]);
+      const FG = parseHex(PALETTE[0]);
+
+      // Render the bot at its own layer first, untouched.
+      const layer = document.createElement('canvas');
+      const bot = new PixelBot(layer, { scale: SAFE_SIZE / 24 });
+      bot.setMood(MOODS.happy);
+      bot.setBars(4);
+      bot.render();
+
+      // Recolour: the renderer's own background fill becomes the chroma key.
+      const lctx = layer.getContext('2d');
+      const img = lctx.getImageData(0, 0, layer.width, layer.height);
+      const d = img.data;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i] === BG[0] && d[i + 1] === BG[1] && d[i + 2] === BG[2]) {
+          d[i + 3] = 0; // background -> transparent
+        } else {
+          d[i] = FG[0];
+          d[i + 1] = FG[1];
+          d[i + 2] = FG[2]; // anything the bot drew -> flat dark silhouette
+        }
+      }
+      lctx.putImageData(img, 0, 0);
+
+      // Composite into the padded 108dp canvas, safe zone centred.
+      const out = document.getElementById('out');
+      out.getContext('2d').drawImage(layer, PAD, PAD, SAFE_SIZE, SAFE_SIZE);
+    </script>
+  </body>
+</html>

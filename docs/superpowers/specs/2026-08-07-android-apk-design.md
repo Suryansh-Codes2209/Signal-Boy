@@ -35,9 +35,15 @@ measures where you are standing.
 - **iOS.** Apple exposes no public API for RSSI. There is nothing to build.
 - **Noise floor and SNR on Android.** AOSP does not expose it. It renders `N/A`
   with the reason attached, exactly as Windows does today.
-- **Pairing with the desktop daemon.** The APK does not talk to a running
-  daemon, does not push its readings anywhere, and does not scan the startup QR
-  code. A two-point survey is a separate idea, not part of this work.
+- **Pushing the phone's readings to a daemon.** The APK never sends its own
+  measurements anywhere. A two-point survey — laptop and phone on screen
+  together — remains a separate idea.
+
+> **Amended 2026-08-07 — the APK does both.** The original non-goal said the
+> APK would not talk to a daemon at all. That is reversed: it must work
+> standalone *and* as a remote display for a laptop daemon, switchable, one
+> source at a time. See "Dual mode" below. What stays out of scope is the
+> phone pushing its readings *outward*.
 - **Replacing `npx signalboy`.** The daemon remains the desktop product.
 - **Live AP scanning.** Android throttles scans to 4 per 2 minutes. This is an OS
   limit with no workaround outside developer options, so the AP view is
@@ -176,6 +182,56 @@ The LED has no network to report on in the APK. `native.js` maps it to sensor
 health instead: `live` while readings arrive, `error` when WiFi is off or the
 bridge throws. `freshness.js` continues to drive the STALE treatment unchanged,
 which correctly covers the case where WiFi is disabled mid-walk.
+
+### Dual mode
+
+The APK measures its own radio by default, and can instead act as a remote
+display for a laptop daemon. One source at a time, switchable, with the header
+always naming which device the number describes.
+
+The source abstraction already makes this nearly free: `sse.js` and `native.js`
+satisfy one interface, and `createSource()` currently picks with
+`bridge ? native : sse` — which inside the APK means the bridge always wins and
+the daemon path is unreachable. It becomes an explicit mode with a default,
+rather than a hardcoded either/or.
+
+Two things this needs that do not exist yet:
+
+**A base URL for the SSE source.** `sse.js` uses relative paths (`/api/stream`,
+`/api/platform`), which resolve against the asset-loader origin inside the APK.
+It takes a base URL so the same module can address a daemon across the LAN.
+
+**Mixed content permitted in the WebView.** The page is served from
+`https://appassets.androidplatform.net`, a secure origin, and a secure origin
+fetching `http://192.168.1.14:3000` is mixed content. Browsers block that with
+no override — it is precisely why a hosted copy of Signal Boy cannot work, as
+the README says. WebView is not a browser: `setMixedContentMode(
+MIXED_CONTENT_ALWAYS_ALLOW)` permits it. So the APK can hold a secure context
+*and* reach a plain-HTTP LAN daemon, with no certificate warning and no
+`--https` flag. This is the one capability the APK has that no browser does,
+and it means the daemon path needs no new networking code — `sse.js` works
+unchanged once it accepts a base URL.
+
+The last daemon address persists in `localStorage`, which the WebView already
+has enabled. No Kotlin involved, so the bridge stays dumb.
+
+Four ways to learn a daemon's address, in increasing cost:
+
+| | needs |
+|---|---|
+| Type the URL | nothing — the daemon already prints it at startup |
+| Remember the last one | `localStorage` |
+| Scan the startup QR | CAMERA permission, CameraX, and a QR **decoder** — the project has an encoder only |
+| Discover on the LAN | daemon-side mDNS advertisement over `node:dgram`, and `NsdManager` on Android |
+
+The QR stays a plain URL rather than a custom `signalboy://` scheme, because its
+existing job is to open the page in a phone browser and a custom scheme would
+break that. So scanning happens inside the app, not via the system camera.
+
+Adding a QR scanner makes the camera genuinely available, so `androidApp`'s
+`camera` capability moves off `NONE` when that lands. The matrix must be
+corrected in the same change, not left claiming a limitation the APK no longer
+has.
 
 ### Android in the capability matrix
 
@@ -322,3 +378,49 @@ the constraint this work exists to remove.
 
 **A PWA or Trusted Web Activity.** Neither can reach `WifiManager`. No amount of
 web packaging changes what the browser sandbox exposes.
+
+---
+
+## Amendment 2026-08-07 — Bluetooth hunting and audio feedback
+
+### Bluetooth
+
+The APK scans BLE advertisements and lists devices by RSSI, so you can walk a
+device down. `BluetoothLeScanner` reports continuously with **no throttle**,
+unlike WiFi's 4-scans-per-2-minutes — which is what makes real-time hunting
+possible at all.
+
+**BLE only. Classic Bluetooth discovery is out of scope:** it reports RSSI once
+at discovery time and takes ~12s per sweep, so it cannot drive a live readout.
+
+Honest limits, which the UI must state rather than imply away:
+
+- BLE finds devices that **advertise**. Hidden cameras are overwhelmingly WiFi
+  devices and appear in the NEARBY view instead. The hidden-device story is the
+  two views together, not Bluetooth alone.
+- Modern trackers **rotate their MAC address** (~15 min) specifically to defeat
+  this. A device is followable within that window, not across a long hunt.
+- **No distance, ever.** `pathloss.js` is calibrated for WiFi; BLE transmit
+  power varies wildly by device, so metres would be fabricated. Hot/cold by
+  RSSI only.
+
+Permissions: `BLUETOOTH_SCAN` with `neverForLocation` (API 31+),
+`BLUETOOTH_CONNECT` for device names. A denial must not block the WiFi meter.
+
+Kotlin stays dumb: it forwards raw `ScanResult` fields and the JS side maps them,
+exactly as `android-map.js` does for WiFi.
+
+### Audio
+
+A square-wave tone whose pitch tracks the filtered RSSI of whatever is selected —
+the connected WiFi network, or a chosen BLE device. Off by default.
+
+- **Square wave is deliberate**: it is the Game Boy DMG voice, the same argument
+  as the four-colour palette.
+- **Map dBm to semitones, not to raw hertz.** Pitch perception is logarithmic;
+  mapping straight to Hz crams the useful range into a squeak at one end.
+- **Drive from the Kalman-filtered value**, never raw, or it warbles unusably.
+- A metal-detector click-rate mode behind the same toggle. Rate is easier to
+  read while moving because it needs no reference tone.
+
+Web Audio requires a user gesture to start, so the toggle doubles as the unlock.

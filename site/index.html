@@ -13,16 +13,43 @@
 
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://signalboy.suryansh.work" />
+    <meta property="og:site_name" content="Signal Boy" />
     <meta property="og:title" content="Signal Boy" />
     <meta
       property="og:description"
       content="Walk around your house and watch the dBm move. npx signalboy — no install, no dependencies."
     />
-    <meta name="twitter:card" content="summary" />
+
+    <!--
+      Absolute URLs: crawlers resolve these without a document base, so a
+      relative path silently yields no preview. Generated from tools/og-card.html
+      at exactly 1200x630, which is why the card type is summary_large_image --
+      "summary" would crop this to a small square and lose the wordmark.
+    -->
+    <meta property="og:image" content="https://signalboy.suryansh.work/og.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Signal Boy on a Game Boy-style green LCD, reading -58 dBm, with the command npx signalboy."
+    />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Signal Boy" />
+    <meta
+      name="twitter:description"
+      content="Walk around your house and watch the dBm move. npx signalboy — no install, no dependencies."
+    />
+    <meta name="twitter:image" content="https://signalboy.suryansh.work/og.png" />
+    <meta
+      name="twitter:image:alt"
+      content="Signal Boy on a Game Boy-style green LCD, reading -58 dBm, with the command npx signalboy."
+    />
 
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Crect width='8' height='8' fill='%239bbc0f'/%3E%3Crect x='1' y='5' width='1' height='2' fill='%230f380f'/%3E%3Crect x='3' y='3' width='1' height='4' fill='%230f380f'/%3E%3Crect x='5' y='1' width='1' height='6' fill='%230f380f'/%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='0' y='0' width='24' height='24' fill='%239bbc0f'/%3E%3Crect x='11' y='3' width='2' height='3' fill='%230f380f'/%3E%3Crect x='10' y='1' width='4' height='2' fill='%23306230'/%3E%3Crect x='15' y='3' width='1' height='2' fill='%230f380f'/%3E%3Crect x='17' y='2' width='1' height='4' fill='%230f380f'/%3E%3Crect x='19' y='1' width='1' height='6' fill='%230f380f'/%3E%3Crect x='21' y='0' width='1' height='8' fill='%230f380f'/%3E%3Crect x='4' y='6' width='16' height='12' fill='%230f380f'/%3E%3Crect x='3' y='7' width='18' height='10' fill='%230f380f'/%3E%3Crect x='5' y='7' width='14' height='10' fill='%238bac0f'/%3E%3Crect x='4' y='8' width='16' height='8' fill='%238bac0f'/%3E%3Crect x='7' y='11' width='3' height='1' fill='%230f380f'/%3E%3Crect x='14' y='11' width='3' height='1' fill='%230f380f'/%3E%3Crect x='9' y='14' width='1' height='1' fill='%230f380f'/%3E%3Crect x='10' y='15' width='4' height='1' fill='%230f380f'/%3E%3Crect x='14' y='14' width='1' height='1' fill='%230f380f'/%3E%3Crect x='8' y='18' width='8' height='2' fill='%230f380f'/%3E%3Crect x='6' y='20' width='12' height='3' fill='%230f380f'/%3E%3Crect x='7' y='21' width='10' height='1' fill='%238bac0f'/%3E%3Crect x='6' y='23' width='3' height='1' fill='%230f380f'/%3E%3Crect x='15' y='23' width='3' height='1' fill='%230f380f'/%3E%3C/svg%3E"
     />
 
     <style>
@@ -169,6 +196,26 @@
         text-transform: uppercase;
         font-size: 11px;
         color: var(--lcd-1);
+      }
+
+      /* ---------- android download ---------- */
+
+      .download {
+        display: inline-block;
+        background: var(--lcd-0);
+        color: var(--lcd-3);
+        border: var(--border) solid var(--lcd-0);
+        padding: calc(var(--u) * 1.5) calc(var(--u) * 2);
+        font-size: 16px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        text-decoration: none;
+        margin-bottom: calc(var(--u) * 2);
+      }
+
+      .download:hover,
+      .download:focus-visible {
+        background: var(--lcd-1);
       }
 
       /* ---------- terminal sample ---------- */
@@ -358,6 +405,19 @@
           <p class="meta">
             Node 20+ &middot; macOS, Windows, Linux &middot; zero dependencies &middot; MIT
           </p>
+
+          <a
+            class="download"
+            href="https://github.com/Suryansh-Codes2209/Signal-Boy/releases/latest/download/signalboy.apk"
+          >
+            Download for Android
+          </a>
+          <p class="note">
+            The Android app reads <code>WifiManager</code> directly — exact dBm for your own
+            connection, exact dBm for every nearby access point, plus BLE device hunting by audio
+            and radar. It never shows a distance; no BLE or WiFi radio measurement supports one.
+            Installing it needs allowing installs from your browser once.
+          </p>
         </header>
 
         <h2>What it does</h2>
@@ -537,7 +597,7 @@ npx signalboy --help</pre>
     <footer>
       <span>Signal Boy &middot; MIT</span>
       <a href="https://www.npmjs.com/package/signalboy">npm</a>
-      <a href="https://github.com/suryansh/signalboy">GitHub</a>
+      <a href="https://github.com/Suryansh-Codes2209/Signal-Boy">GitHub</a>
     </footer>
 
     <script>

@@ -1,6 +1,7 @@
 import { el, clear, stat } from '../dom.js';
 import { PixelMeter, Sparkline } from '../render/meter.js';
 import { Freshness, freshnessLabel } from '../freshness.js';
+import { createAudioControls } from '../audio/controls.js';
 
 /**
  * Live signal view: the large readout, the rolling history strip and the
@@ -34,6 +35,7 @@ export function createLiveView(root, { platform }) {
   const meter = new PixelMeter(meterCanvas);
   const spark = new Sparkline(sparkCanvas);
   const freshness = new Freshness();
+  const audio = createAudioControls('live');
   let lastReading = null;
 
   root.append(
@@ -54,6 +56,9 @@ export function createLiveView(root, { platform }) {
           ),
         ),
       ),
+      // Pitch or click-rate feedback for the connected network's own signal --
+      // off by default like everywhere else audio appears in this app.
+      el('div', { class: 'panel-body' }, audio.el),
       statusEl,
     ),
     el(
@@ -146,6 +151,9 @@ export function createLiveView(root, { platform }) {
             reading?.error ?? 'The daemon returned no reading.',
           ),
         );
+        // Nothing to sound while there is no reading -- the filtered value
+        // below is exactly what a live tone would otherwise be tracking.
+        audio.update(null);
         return;
       }
 
@@ -161,9 +169,15 @@ export function createLiveView(root, { platform }) {
       spark.render();
       renderStats(reading);
       renderNote(reading);
+      // Driven from the Kalman-filtered value, same field the meter itself
+      // reads -- raw RSSI warbles too fast to be a listenable tone.
+      audio.update(reading.filtered ?? reading.rssi);
 
       freshness.mark();
       showFreshness();
     },
+    // Switching to another tab must not leave this view's tone playing behind
+    // the one now on screen -- app.js calls this on every tab change.
+    onHide: () => audio.stop(),
   };
 }

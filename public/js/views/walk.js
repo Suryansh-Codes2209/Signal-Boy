@@ -2,6 +2,7 @@ import { el } from '../dom.js';
 import { PixelMeter, Sparkline, meterScaleForWidth, meterHeightForScale } from '../render/meter.js';
 import { Freshness, freshnessLabel } from '../freshness.js';
 import { createWakeLock } from '../wakelock.js';
+import { createAudioControls } from '../audio/controls.js';
 
 /**
  * The phone view: one number, big enough to read at arm's length while walking.
@@ -30,7 +31,10 @@ export function createWalkView(root) {
 
   const wakeBtn = el('button', { class: 'btn walk-wake', type: 'button', text: 'KEEP AWAKE', 'aria-pressed': 'false' });
   const wakeNote = el('p', { class: 'note walk-wake-note' });
-  wrap.append(wakeBtn, wakeNote);
+  // This is the view audio feedback exists for: phone pocketed, screen unread,
+  // pitch or click-rate carrying the signal instead of eyes on a display.
+  const audio = createAudioControls('walk');
+  wrap.append(wakeBtn, wakeNote, audio.el);
 
   const WAKE_LABEL = {
     wakelock: 'SCREEN HELD AWAKE.',
@@ -108,6 +112,7 @@ export function createWalkView(root) {
       spark.render();
       statusEl.textContent = freshnessLabel(state);
       wrap.dataset.stale = 'false';
+      audio.update(null);
       return;
     }
 
@@ -119,6 +124,9 @@ export function createWalkView(root) {
       connected: true,
     });
     spark.render();
+    // The filtered value, never raw -- the same field the digits themselves
+    // read, so the tone and the number never tell two different stories.
+    audio.update(lastReading.filtered ?? lastReading.rssi);
 
     wrap.dataset.stale = String(!fresh);
     statusEl.textContent = freshnessLabel(state, { interfaceName: lastReading.interface });
@@ -146,5 +154,7 @@ export function createWalkView(root) {
       }
       draw();
     },
+    // Leaving WALK for another tab must not leave a tone running behind it.
+    onHide: () => audio.stop(),
   };
 }

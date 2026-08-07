@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Signal Boy — icon master</title>
+    <!--
+      Source for tools/bot-icon.png: TRK the pixel companion, rendered as a
+      single static frame at high resolution by headless Chrome.
+
+      This is the ONE master the Android launcher icon, the web favicon and
+      the splash screen all trace back to. It imports the real renderer
+      (public/js/render/bot.js) rather than hand-copying the sprite, so the
+      icon can never drift from the bot the app actually draws -- if bot.js
+      changes, regenerating this file picks the change up automatically.
+
+      render() is called directly instead of start(): start() begins the
+      blink loop, which is exactly the kind of non-determinism a still image
+      cannot have -- whichever frame the screenshot happened to land on would
+      become the icon forever.
+
+      Mood: happy, 4 bars. moodForBand() in bot.js maps the "excellent"/"good"
+      signal bands to `happy` -- it is already the app's own designation for
+      "everything is fine". Full bars needs no separate justification. Chosen
+      over `alert` (wide eyes, small open mouth) by rendering both side by
+      side: alert reads as startled, not healthy: happy is the unambiguous
+      "this app is doing great" face, which is what an app icon should say
+      before anyone opens it.
+
+      Regenerate with (module imports need file-access-from-files; a plain
+      file:// page otherwise blocks the import with a CORS error):
+
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+          --headless --disable-gpu --hide-scrollbars \
+          --allow-file-access-from-files --force-device-scale-factor=1 \
+          --window-size=768,768 --screenshot=tools/bot-icon.png \
+          tools/bot-icon.html
+    -->
+    <style>
+      html, body { margin: 0; }
+      canvas { display: block; }
+    </style>
+  </head>
+  <body>
+    <canvas id="bot"></canvas>
+    <script type="module">
+      import { PixelBot, MOODS } from '../public/js/render/bot.js';
+
+      const bot = new PixelBot(document.getElementById('bot'), { scale: 32 });
+      bot.setMood(MOODS.happy);
+      bot.setBars(4);
+      bot.render();
+    </script>
+  </body>
+</html>
