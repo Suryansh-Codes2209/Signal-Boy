@@ -49,10 +49,17 @@ android {
         // A local `./gradlew assembleRelease` produces an unsigned APK.
         if (System.getenv("SIGNALBOY_KEYSTORE") != null) {
             create("release") {
+                val store = System.getenv("SIGNALBOY_KEYSTORE_PASSWORD")
                 storeFile = File(System.getenv("SIGNALBOY_KEYSTORE"))
-                storePassword = System.getenv("SIGNALBOY_KEYSTORE_PASSWORD")
+                storePassword = store
                 keyAlias = System.getenv("SIGNALBOY_KEY_ALIAS")
-                keyPassword = System.getenv("SIGNALBOY_KEY_PASSWORD")
+                // keytool -genkeypair produces a PKCS12 keystore, and PKCS12 has
+                // no concept of a per-key password -- it is always the store
+                // password. Falling back to it means a blank or absent key-password
+                // secret cannot produce the very confusing failure it otherwise
+                // does: the store opens, then the key read fails with
+                // "Given final block not properly padded".
+                keyPassword = System.getenv("SIGNALBOY_KEY_PASSWORD")?.takeIf { it.isNotBlank() } ?: store
             }
         }
     }
