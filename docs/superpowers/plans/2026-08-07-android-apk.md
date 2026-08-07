@@ -1743,7 +1743,15 @@ Add these methods to the class:
 
 Delete the previous standalone `onDestroy` so there is exactly one.
 
-Note: `readConnected()` returns a JSON *object* string, so it interpolates directly as the argument — no quoting needed.
+> **Corrected 2026-08-07.** An earlier version of this step said the payload "interpolates directly as the argument — no quoting needed." That is wrong and shipped a silent failure: interpolating bare gives JS an **object literal**, but `native.js` calls `JSON.parse()` on what it receives, and `JSON.parse` of an object coerces to `"[object Object]"` and throws. Every reading was dropped and the meter sat on CONNECTING forever, while the Kotlin-side log showed perfectly correct values — which is exactly what made it survive a ground-truth check.
+>
+> The payload must be quoted so JS receives a **string**:
+>
+> ```kotlin
+> webView.evaluateJavascript("window.__signalboyPush(${JSONObject.quote(json)})", null)
+> ```
+>
+> `test/sources.test.js` did not catch this because it only ever pushed `JSON.stringify(...)` — it tested a contract Kotlin did not implement. Any test for a bridge must push the exact byte sequence the native side emits.
 
 - [ ] **Step 3: Build and install**
 

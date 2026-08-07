@@ -1,5 +1,6 @@
 package work.suryansh.signalboy
 
+import android.graphics.Bitmap
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -10,6 +11,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
 import androidx.webkit.WebViewAssetLoader
+import org.json.JSONObject
 
 /**
  * Hosts the Signal Boy UI in a WebView.
@@ -67,6 +69,14 @@ class MainActivity : AppCompatActivity() {
                     request: WebResourceRequest,
                 ): WebResourceResponse? = loader.shouldInterceptRequest(request.url)
 
+                override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+                    // onPageFinished fires for Chromium's own error page too (a failed
+                    // load keeps its navigation entry, so the url argument there is not
+                    // a reliable signal). Reset here so a retried/reloaded navigation
+                    // is free to call startPushing() again once a real page commits.
+                    pushing = false
+                }
+
                 override fun onPageFinished(view: WebView, url: String) {
                     startPushing()
                 }
@@ -92,7 +102,23 @@ class MainActivity : AppCompatActivity() {
         val tick = object : Runnable {
             override fun run() {
                 val json = bridge.readConnected()
-                webView.evaluateJavascript("window.__signalboyPush($json)", null)
+                // JSONObject.quote is required, not decorative: bare interpolation hands
+                // JavaScript an object *literal* ({"rssi":-58,...} evaluates as an
+                // expression), not the JSON string native.js expects to JSON.parse.
+                // parse() on an object coerces to the string "[object Object]", throws,
+                // and every reading is silently dropped -- the meter never leaves
+                // CONNECTING. Quoting makes the argument a JS string literal so
+                // JSON.parse gets the text it actually needs.
+                //
+                // The typeof guard covers onPageFinished firing on a load that never
+                // actually installed the hook (Chromium's own error page): without it
+                // this tick would throw a TypeError once a second, forever, on top of
+                // pushing() already being reset for a future real load.
+                webView.evaluateJavascript(
+                    "if (typeof window.__signalboyPush === 'function') { " +
+                        "window.__signalboyPush(${JSONObject.quote(json)}); }",
+                    null,
+                )
                 handler.postDelayed(this, intervalMs.toLong())
             }
         }
@@ -108,6 +134,12 @@ class MainActivity : AppCompatActivity() {
      */
     private fun requestWifiPermissions() {
         // Intentionally no-op: see Task 9.
+        //
+        // Note for whoever wires this up: @JavascriptInterface methods (this is
+        // called from WifiBridge's onRequestPermissions callback) run on the
+        // WebView's JavaBridge thread, not the main thread. requestPermissions()
+        // and any Activity UI work it triggers must be posted to `handler`
+        // (main-thread Looper) before touching the Activity, or it will crash.
     }
 
     override fun onDestroy() {

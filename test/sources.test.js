@@ -31,7 +31,7 @@ test('a pushed reading reaches wifi subscribers filtered and graded', () => {
   source.on('wifi', (r) => seen.push(r));
   source.connect();
 
-  scope.__signalboyPush(JSON.stringify({ rssi: -58, frequency: 5180, networkId: 1, linkSpeed: 780 }));
+  scope.__signalboyPush(JSON.stringify({ rssi: -58, frequency: 5180, linkSpeed: 780 }));
 
   assert.equal(seen.length, 1);
   assert.equal(seen[0].rssi, -58, 'the measured value is preserved');
@@ -49,7 +49,7 @@ test('the filter converges towards the true value across repeated pushes', () =>
   source.connect();
 
   for (let i = 0; i < 40; i += 1) {
-    scope.__signalboyPush(JSON.stringify({ rssi: -60, frequency: 2412, networkId: 1 }));
+    scope.__signalboyPush(JSON.stringify({ rssi: -60, frequency: 2412 }));
   }
 
   const last = seen.at(-1).filtered;
@@ -65,10 +65,10 @@ test('state goes live on the first reading and errors when the radio drops', () 
 
   assert.equal(states[0], 'connecting');
 
-  scope.__signalboyPush(JSON.stringify({ rssi: -58, frequency: 5180, networkId: 1 }));
+  scope.__signalboyPush(JSON.stringify({ rssi: -58, frequency: 5180 }));
   assert.equal(states.at(-1), 'live');
 
-  scope.__signalboyPush(JSON.stringify({ rssi: -127, networkId: -1 }));
+  scope.__signalboyPush(JSON.stringify({ rssi: -127 }));
   assert.equal(states.at(-1), 'error', 'a disconnected radio is not a live reading');
 });
 
@@ -80,10 +80,10 @@ test('a failed reading resets the filter so it cannot carry a stale estimate bac
   source.connect();
 
   for (let i = 0; i < 20; i += 1) {
-    scope.__signalboyPush(JSON.stringify({ rssi: -40, frequency: 5180, networkId: 1 }));
+    scope.__signalboyPush(JSON.stringify({ rssi: -40, frequency: 5180 }));
   }
-  scope.__signalboyPush(JSON.stringify({ rssi: -127, networkId: -1 }));
-  scope.__signalboyPush(JSON.stringify({ rssi: -85, frequency: 5180, networkId: 1 }));
+  scope.__signalboyPush(JSON.stringify({ rssi: -127 }));
+  scope.__signalboyPush(JSON.stringify({ rssi: -85, frequency: 5180 }));
 
   const resumed = seen.at(-1).filtered;
   assert.ok(resumed < -70, `estimate should restart near -85, not drift down from -40 (got ${resumed})`);
@@ -144,4 +144,40 @@ test('malformed JSON from the bridge is ignored rather than thrown', () => {
 
   assert.doesNotThrow(() => scope.__signalboyPush('not json'));
   assert.equal(seen.length, 0);
+});
+
+test('the bridge contract is a JSON string: the literal text Kotlin emits reaches a reading', () => {
+  // Not JSON.stringify(...) here -- that's what every other test does, and it
+  // is exactly the gap that let MainActivity's bare `$json` interpolation ship:
+  // evaluateJavascript("window.__signalboyPush($json)", null) hands JavaScript
+  // an object *literal*, not this string. This test pushes the literal source
+  // text MainActivity.kt evaluates once JSONObject.quote() wraps the payload,
+  // i.e. what __signalboyPush actually receives as its argument on-device.
+  const scope = {};
+  const source = createNativeSource(fakeBridge(), scope);
+  const seen = [];
+  source.on('wifi', (r) => seen.push(r));
+  source.connect();
+
+  scope.__signalboyPush('{"connected":true,"rssi":-58,"frequency":5180}');
+
+  assert.equal(seen.length, 1, 'the JSON string must parse into exactly one reading');
+  assert.equal(seen[0].rssi, -58);
+});
+
+test('the bridge contract rejects an object: pushing one produces no reading', () => {
+  // The other half of the same pin. If a future change reintroduces bare
+  // interpolation, __signalboyPush starts receiving object literals again --
+  // JSON.parse(anObject) calls String(anObject), yields "[object Object]",
+  // throws, and parse() swallows it. This must stay silent-and-empty, not
+  // silently succeed, or the regression above would stop being a regression.
+  const scope = {};
+  const source = createNativeSource(fakeBridge(), scope);
+  const seen = [];
+  source.on('wifi', (r) => seen.push(r));
+  source.connect();
+
+  scope.__signalboyPush({ connected: true, rssi: -58, frequency: 5180 });
+
+  assert.equal(seen.length, 0, 'an object is not the bridge contract and must not yield a reading');
 });
