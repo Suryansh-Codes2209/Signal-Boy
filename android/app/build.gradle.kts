@@ -39,14 +39,11 @@ android {
         versionCode = versionCodeFrom(packageVersion)
     }
 
-    buildTypes {
-        release {
-            isMinifyEnabled = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.findByName("release")
-        }
-    }
-
+    // Declared BEFORE buildTypes, and that order is load-bearing: this script is
+    // evaluated top-down, so a `signingConfigs.findByName("release")` above this
+    // block resolves to null and silently produces an unsigned APK. That failure
+    // is invisible locally -- it only surfaces in CI as a missing
+    // app-release.apk, because an unsigned build is named app-release-unsigned.apk.
     signingConfigs {
         // Populated only in CI, where the keystore is restored from a secret.
         // A local `./gradlew assembleRelease` produces an unsigned APK.
@@ -57,6 +54,14 @@ android {
                 keyAlias = System.getenv("SIGNALBOY_KEY_ALIAS")
                 keyPassword = System.getenv("SIGNALBOY_KEY_PASSWORD")
             }
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 

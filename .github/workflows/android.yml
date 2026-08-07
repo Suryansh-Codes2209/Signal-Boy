@@ -40,8 +40,23 @@ jobs:
 
       # A fixed asset name is what makes releases/latest/download/signalboy.apk
       # a stable link, so the landing page never needs redeploying per release.
+      # A fixed asset name is what makes releases/latest/download/signalboy.apk a
+      # stable link, so the landing page never needs redeploying per release.
+      #
+      # The explicit check exists because the failure it catches is silent: if the
+      # signing config is not wired up, Gradle still succeeds and simply emits
+      # app-release-unsigned.apk instead. Without this, the only symptom is a
+      # cryptic `cp: No such file or directory` several steps later.
       - name: Name the artifact predictably
-        run: cp android/app/build/outputs/apk/release/app-release.apk signalboy.apk
+        run: |
+          out=android/app/build/outputs/apk/release
+          if [ ! -f "$out/app-release.apk" ]; then
+            echo "::error::No signed APK was produced. Found:"
+            ls -1 "$out" || true
+            echo "::error::An app-release-unsigned.apk here means the release signingConfig resolved to null — check that signingConfigs is declared BEFORE buildTypes in android/app/build.gradle.kts, and that all four ANDROID_* secrets are set."
+            exit 1
+          fi
+          cp "$out/app-release.apk" signalboy.apk
 
       - uses: actions/upload-artifact@v4
         with:
