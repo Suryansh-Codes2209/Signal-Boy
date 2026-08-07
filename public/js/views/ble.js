@@ -1,7 +1,9 @@
 import { el, clear } from '../dom.js';
 import { shadeColor } from '../render/palette.js';
 import { gradeRssi } from '../core/pathloss.js';
+import { Kalman1D } from '../core/filter.js';
 import { createBleSource, bleBridge } from '../sources/ble.js';
+import { createAudioControls } from '../audio/controls.js';
 
 /**
  * BLE hunting: every advertising device nearby, loudest first, refreshed
@@ -13,6 +15,13 @@ import { createBleSource, bleBridge } from '../sources/ble.js';
  * scanning is opt-in here and stops the moment this tab is not the one on
  * screen: an unthrottled radio scan running behind a hidden tab is a battery
  * cost with no one watching the result.
+ *
+ * This is where audio feedback pays off: tap a device to select it, pocket
+ * the phone, and walk on the tone or the click rate instead of the screen.
+ * Selection tracks one device's RSSI through its own Kalman1D filter -- BLE
+ * RSSI is noisier than WiFi's, and a raw value would make the tone warble
+ * unusably within seconds. A device found by a fresh scan (or a rotated MAC)
+ * gets a fresh filter; there is no cross-device smoothing to get confused by.
  */
 
 const POLL_MS = 1000;
@@ -37,8 +46,16 @@ export function createBleView(root, context) {
   const status = el('p', { class: 'note', role: 'status', 'aria-live': 'polite' });
   const list = el('div', { class: 'ble-list' });
   const limits = el('p', { class: 'note', text: LIMITS_NOTE });
+  const audio = createAudioControls('hunt');
+  const tracking = el('p', { class: 'note ble-tracking' });
+  const selectHint = el('p', { class: 'note', text: 'TAP A DEVICE BELOW TO TRACK IT WITH AUDIO.' });
 
-  root.append(el('div', { class: 'ble' }, el('div', { class: 'ble-bar' }, button, count, status), limits, list));
+  root.append(
+    el('div', { class: 'ble' }, el('div', { class: 'ble-bar' }, button, count, status), limits, list),
+    audio.el,
+    selectHint,
+    tracking,
+  );
 
   if (unsupported) {
     button.disabled = true;
@@ -49,8 +66,56 @@ export function createBleView(root, context) {
   const source = createBleSource(bridge);
   let scanning = false;
   let pollTimer = null;
+  let lastMapped = { devices: [] };
+
+  // One selected address at a time, reversible by tapping it again. A
+  // rotated MAC (~15 min on modern trackers) just makes the old address stop
+  // appearing in mapped.devices -- see updateTracking() below for how that
+  // reads as "lost", not as a silent freeze on a stale number.
+  let selectedAddress = null;
+  // Keyed by address so a filter never mixes RSSI samples from two different
+  // physical devices; a rotated MAC starts a fresh filter rather than reusing
+  // a stale one under the assumption it's still the same radio.
+  const filters = new Map();
+
+  function filterFor(address) {
+    let filter = filters.get(address);
+    if (!filter) {
+      filter = new Kalman1D();
+      filters.set(address, filter);
+    }
+    return filter;
+  }
+
+  /** Drives the audio engine from whichever device is selected, or silences it if none is. */
+  function updateTracking() {
+    if (!selectedAddress) {
+      tracking.textContent = '';
+      audio.update(null);
+      return;
+    }
+
+    const device = lastMapped.devices.find((d) => d.address === selectedAddress);
+    if (!device) {
+      // Out of range or its MAC just rotated -- an honest "lost", not a tone
+      // frozen on the last number it happened to see.
+      tracking.textContent = `TRACKING ${selectedAddress} -- LOST (OUT OF RANGE OR ADDRESS ROTATED)`;
+      audio.update(null);
+      return;
+    }
+
+    tracking.textContent = `TRACKING ${device.name ?? 'UNNAMED'} (${device.address})`;
+    audio.update(filterFor(selectedAddress).update(device.rssi));
+  }
+
+  function toggleSelect(address) {
+    selectedAddress = selectedAddress === address ? null : address;
+    render(lastMapped);
+    updateTracking();
+  }
 
   function render(mapped) {
+    lastMapped = mapped;
     clear(list);
 
     if (!mapped.devices.length) {
@@ -62,10 +127,25 @@ export function createBleView(root, context) {
 
     for (const d of mapped.devices) {
       const grade = gradeRssi(d.rssi);
+      const selected = d.address === selectedAddress;
       list.append(
         el(
           'div',
-          { class: 'ble-row' },
+          {
+            class: 'ble-row',
+            dataset: { selected: String(selected) },
+            role: 'button',
+            tabindex: '0',
+            'aria-pressed': String(selected),
+            'aria-label': `Track ${d.name ?? 'unnamed device'} with audio`,
+            onClick: () => toggleSelect(d.address),
+            onKeydown: (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleSelect(d.address);
+              }
+            },
+          },
           el('span', { class: 'ble-swatch', style: `background:${shadeColor(grade?.shade ?? 0)}` }),
           el('span', { class: 'ble-name', text: d.name ?? 'UNNAMED' }),
           el('span', { class: 'ble-rssi', text: d.rssi == null ? 'N/A' : `${d.rssi} DBM` }),
@@ -83,10 +163,14 @@ export function createBleView(root, context) {
 
   function poll() {
     render(source.poll());
+    updateTracking();
   }
 
   function stop() {
-    if (!scanning) return;
+    audio.stop();
+    if (!scanning) {
+      return;
+    }
     scanning = false;
     source.stopScan();
     if (pollTimer) {
@@ -96,6 +180,12 @@ export function createBleView(root, context) {
     button.textContent = 'START';
     button.setAttribute('aria-pressed', 'false');
     status.textContent = 'STOPPED.';
+    // The device list Kotlin holds is cleared on the next startScan(), so a
+    // kept selection or filter would just be pointing at nothing -- clear
+    // both rather than let them silently go stale until the next START.
+    selectedAddress = null;
+    filters.clear();
+    tracking.textContent = '';
   }
 
   function start() {
@@ -125,14 +215,16 @@ export function createBleView(root, context) {
   // A radio scan left running behind a hidden tab, or a backgrounded app, is a
   // pure battery cost with no payoff. This is the cooperative half of the
   // stop; MainActivity.onPause() enforces the same thing at the platform
-  // level regardless of whether this listener runs.
+  // level regardless of whether this listener runs. It also covers audio:
+  // stop() always silences it, scanning or not.
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) stop();
   });
 
   return {
     // Called by app.js when the user switches to another tab -- see the
-    // module comment for why a running scan cannot be left behind.
+    // module comment for why a running scan (and its tone) cannot be left
+    // behind.
     onHide: stop,
   };
 }

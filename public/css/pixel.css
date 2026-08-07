@@ -599,3 +599,43 @@ canvas {
    rotates on modern trackers besides -- own line, not a column beside dBm,
    same reasoning as .ap-bssid. */
 .ble-addr   { grid-area: addr; color: var(--lcd-1); }
+
+/* A row is tappable -- selecting one is what points audio feedback at it. */
+.ble-row { cursor: pointer; }
+
+.ble-row:focus-visible {
+  outline: var(--border) solid var(--lcd-0);
+  outline-offset: calc(var(--border) * -1);
+}
+
+/* Same sticky-:hover risk as .tab and .btn above: a tap leaves :hover applied
+   on a touch device, so this must never be trusted to clear on its own. */
+@media (hover: hover) {
+  .ble-row:hover { background: var(--lcd-2); }
+}
+
+/* Qualified with .ble-list (not just .ble-row), same reasoning as
+   `.tabs .tab[aria-selected="true"]` above: specificity (0,3,0) has to beat
+   `.ble-row:hover` (0,2,0) outright, or the row you just tapped to select
+   would keep showing the hover tint instead of the selected one on any
+   device that matches (hover: hover) and also takes a tap. */
+.ble-list .ble-row[data-selected="true"] {
+  background: var(--lcd-0);
+  color: var(--lcd-3);
+}
+.ble-list .ble-row[data-selected="true"] .ble-meta,
+.ble-list .ble-row[data-selected="true"] .ble-addr {
+  color: var(--lcd-2);
+}
+
+/* ---------- audio feedback (SOUND / PITCH-RATE toggle) ---------- */
+/* Unrelated to .speech-mute (TRK's typewriter voice-over, in companion.js) --
+   separate classes so the two controls can never be confused for each other
+   in either the markup or this stylesheet. */
+.audio-controls {
+  gap: calc(var(--u) / 2);
+}
+
+.ble-tracking {
+  font-weight: 700;
+}
