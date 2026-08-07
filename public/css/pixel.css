@@ -639,3 +639,28 @@ canvas {
 .ble-tracking {
   font-weight: 700;
 }
+
+/* ---------- radar (concentric proximity rings for the selected device) ---------- */
+/* The canvas draws its own border-free dartboard, so the wrap supplies the
+   frame every other panel in this app gets from `.lcd`/`.ap`-style borders --
+   without it the radar would be the one bordered element missing its border. */
+.radar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--u);
+  margin-top: var(--u);
+  padding: var(--u);
+  border: var(--border) solid var(--lcd-0);
+}
+
+/* No sizing rules needed here: setupCanvas() (palette.js) sets the canvas's
+   own inline width/height from radar.js's WIDTH/HEIGHT, and the global
+   `canvas { max-width: 100% }` rule above is what shrinks it on a phone
+   narrower than 256px -- same mechanism .meter-wrap's canvases rely on. */
+
+/* Same sticky-:hover risk as .btn above -- guarded there already, but this
+   button is wide enough on a phone that a stuck hover would be obvious. */
+.radar-reset {
+  width: 100%;
+}
