@@ -198,6 +198,26 @@
         color: var(--lcd-1);
       }
 
+      /* ---------- android download ---------- */
+
+      .download {
+        display: inline-block;
+        background: var(--lcd-0);
+        color: var(--lcd-3);
+        border: var(--border) solid var(--lcd-0);
+        padding: calc(var(--u) * 1.5) calc(var(--u) * 2);
+        font-size: 16px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        text-decoration: none;
+        margin-bottom: calc(var(--u) * 2);
+      }
+
+      .download:hover,
+      .download:focus-visible {
+        background: var(--lcd-1);
+      }
+
       /* ---------- terminal sample ---------- */
 
       pre {
@@ -385,6 +405,19 @@
           <p class="meta">
             Node 20+ &middot; macOS, Windows, Linux &middot; zero dependencies &middot; MIT
           </p>
+
+          <a
+            class="download"
+            href="https://github.com/Suryansh-Codes2209/Signal-Boy/releases/latest/download/signalboy.apk"
+          >
+            Download for Android
+          </a>
+          <p class="note">
+            The Android app reads <code>WifiManager</code> directly — exact dBm for your own
+            connection, exact dBm for every nearby access point, plus BLE device hunting by audio
+            and radar. It never shows a distance; no BLE or WiFi radio measurement supports one.
+            Installing it needs allowing installs from your browser once.
+          </p>
         </header>
 
         <h2>What it does</h2>
@@ -564,7 +597,7 @@ npx signalboy --help</pre>
     <footer>
       <span>Signal Boy &middot; MIT</span>
       <a href="https://www.npmjs.com/package/signalboy">npm</a>
-      <a href="https://github.com/suryansh/signalboy">GitHub</a>
+      <a href="https://github.com/Suryansh-Codes2209/Signal-Boy">GitHub</a>
     </footer>
 
     <script>
