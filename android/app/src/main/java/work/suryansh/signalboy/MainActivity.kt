@@ -1,6 +1,8 @@
 package work.suryansh.signalboy
 
+import android.Manifest
 import android.graphics.Bitmap
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -9,6 +11,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.webkit.WebViewAssetLoader
 import org.json.JSONObject
@@ -33,6 +36,13 @@ class MainActivity : AppCompatActivity() {
 
     /** Matches SIGNALBOY_WIFI_INTERVAL's default in the daemon. */
     private val intervalMs = 1000
+
+    private val permissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+            // The JS side re-reads the grants rather than trusting this payload,
+            // so the two can never disagree.
+            webView.evaluateJavascript("window.__signalboyPermissions?.()", null)
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -126,20 +136,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Stub until Task 9 wires up the real ACCESS_FINE_LOCATION request flow.
-     * requestPermissions() on the JS side already calls into this method, so it
-     * must exist now even though it does nothing yet -- adding the actual
-     * request here would be scope creep for this task, whose only job is
-     * getting a raw RSSI value across the bridge.
+     * Requested on demand, not at launch.
+     *
+     * dBm needs no permission, so the meter works the instant the app opens. Only
+     * network identity and the nearby list need a grant, and asking for Location
+     * before showing anything reads as a WiFi app demanding your position.
      */
     private fun requestWifiPermissions() {
-        // Intentionally no-op: see Task 9.
-        //
-        // Note for whoever wires this up: @JavascriptInterface methods (this is
-        // called from WifiBridge's onRequestPermissions callback) run on the
-        // WebView's JavaBridge thread, not the main thread. requestPermissions()
-        // and any Activity UI work it triggers must be posted to `handler`
-        // (main-thread Looper) before touching the Activity, or it will crash.
+        // @JavascriptInterface methods (this is reached from WifiBridge's
+        // onRequestPermissions callback) run on the WebView's JavaBridge thread,
+        // not the main thread. ActivityResultLauncher.launch() must run on the
+        // main thread or it crashes (or, worse, silently no-ops) -- post it.
+        handler.post {
+            val wanted = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                wanted.add(Manifest.permission.NEARBY_WIFI_DEVICES)
+            }
+            permissionLauncher.launch(wanted.toTypedArray())
+        }
     }
 
     override fun onDestroy() {
