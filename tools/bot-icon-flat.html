@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Signal Boy — legacy launcher icon</title>
+    <!--
+      Source for tools/bot-icon-flat.png: the flattened (pre-adaptive-icon)
+      launcher PNG. Real devices on minSdk 26 always use the
+      mipmap-anydpi-v26 <adaptive-icon>; this square PNG only feeds the
+      res/mipmap-{m,h,xh,xxh,xxxh}dpi/ic_launcher.png fallback that other
+      tooling (e.g. an app-info screen, or anything reading mipmap/ic_launcher
+      directly instead of resolving the adaptive-icon XML) still expects.
+
+      Same recolour-the-renderer's-own-output technique as
+      bot-icon-foreground.html (see its comment), except the background layer
+      is painted in first as an opaque rect instead of left transparent, so
+      this is what background + foreground look like already composited.
+
+      Regenerate with (file-access-from-files for the module import; no
+      transparent backdrop needed here since the result is opaque):
+
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+          --headless --disable-gpu --hide-scrollbars \
+          --allow-file-access-from-files --force-device-scale-factor=1 \
+          --window-size=432,432 --screenshot=tools/bot-icon-flat.png \
+          tools/bot-icon-flat.html
+    -->
+    <style>
+      html, body { margin: 0; }
+      canvas { display: block; }
+    </style>
+  </head>
+  <body>
+    <canvas id="out" width="432" height="432"></canvas>
+    <script type="module">
+      import { PixelBot, MOODS } from '../public/js/render/bot.js';
+      import { PALETTE } from '../public/js/render/palette.js';
+
+      const CANVAS_SIZE = 432;
+      const SAFE_SIZE = 288; // same safe-zone padding as the adaptive foreground
+      const PAD = (CANVAS_SIZE - SAFE_SIZE) / 2;
+
+      const parseHex = (hex) => {
+        const n = parseInt(hex.slice(1), 16);
+        return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
+      };
+      const BG = parseHex(PALETTE[3]);
+      const FG = parseHex(PALETTE[0]);
+
+      const layer = document.createElement('canvas');
+      const bot = new PixelBot(layer, { scale: SAFE_SIZE / 24 });
+      bot.setMood(MOODS.happy);
+      bot.setBars(4);
+      bot.render();
+
+      const lctx = layer.getContext('2d');
+      const img = lctx.getImageData(0, 0, layer.width, layer.height);
+      const d = img.data;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i] === BG[0] && d[i + 1] === BG[1] && d[i + 2] === BG[2]) {
+          d[i + 3] = 0;
+        } else {
+          d[i] = FG[0];
+          d[i + 1] = FG[1];
+          d[i + 2] = FG[2];
+        }
+      }
+      lctx.putImageData(img, 0, 0);
+
+      const out = document.getElementById('out');
+      const octx = out.getContext('2d');
+      octx.fillStyle = PALETTE[3];
+      octx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+      octx.drawImage(layer, PAD, PAD, SAFE_SIZE, SAFE_SIZE);
+    </script>
+  </body>
+</html>

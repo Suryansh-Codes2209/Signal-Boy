@@ -90,4 +90,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.webkit:webkit:1.12.1")
+    // Extends the platform SplashScreen API (API 31+ auto-dismisses almost
+    // immediately) so the 5s hold works identically back to minSdk 26.
+    implementation("androidx.core:core-splashscreen:1.0.1")
 }

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The LCD panel colour (lcd-3 in the web palette). Shared by the
+         adaptive icon background and the splash screen background so both
+         read as the same green DMG panel the app itself draws on. -->
+    <color name="lcd_3">#9bbc0f</color>
+</resources>
