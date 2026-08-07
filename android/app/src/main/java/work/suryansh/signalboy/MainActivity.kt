@@ -47,6 +47,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var splashOverlay: View
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var bridge: WifiBridge
+    private lateinit var bleBridge: BleBridge
     private var pushing = false
 
     /** Matches SIGNALBOY_WIFI_INTERVAL's default in the daemon. */
@@ -57,8 +58,10 @@ class MainActivity : AppCompatActivity() {
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
             // The JS side re-reads the grants rather than trusting this payload,
-            // so the two can never disagree.
+            // so the two can never disagree. Both hooks are called unconditionally
+            // -- whichever one the page hasn't defined is just a no-op via `?.`.
             webView.evaluateJavascript("window.__signalboyPermissions?.()", null)
+            webView.evaluateJavascript("window.__signalboyBlePermissions?.()", null)
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -129,6 +132,9 @@ class MainActivity : AppCompatActivity() {
 
         bridge = WifiBridge(this, intervalMs) { requestWifiPermissions() }
         webView.addJavascriptInterface(bridge, "SignalBoyNative")
+
+        bleBridge = BleBridge(this) { requestBlePermissions() }
+        webView.addJavascriptInterface(bleBridge, "SignalBoyBle")
 
         // Same lcd-3 + bot-foreground pairing as Theme.App.Starting, so the
         // handoff from the cold-launch system splash to this overlay is
@@ -228,7 +234,34 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Same main-thread requirement as requestWifiPermissions(); see its comment. */
+    private fun requestBlePermissions() {
+        handler.post {
+            val wanted = mutableListOf<String>()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                wanted.add(Manifest.permission.BLUETOOTH_SCAN)
+                wanted.add(Manifest.permission.BLUETOOTH_CONNECT)
+            } else {
+                wanted.add(Manifest.permission.ACCESS_FINE_LOCATION)
+            }
+            permissionLauncher.launch(wanted.toTypedArray())
+        }
+    }
+
+    /**
+     * An unthrottled BLE scan left running while the app is backgrounded is a
+     * pure battery cost with no one watching the result. The JS side already
+     * stops its own poll loop on visibilitychange, but that is a cooperative
+     * signal a page could fail to act on; this is the same stop enforced at the
+     * platform level regardless of what the page does.
+     */
+    override fun onPause() {
+        super.onPause()
+        bleBridge.stopScan()
+    }
+
     override fun onDestroy() {
+        bleBridge.stopScan()
         handler.removeCallbacksAndMessages(null)
         webView.destroy()
         super.onDestroy()

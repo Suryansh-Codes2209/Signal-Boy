@@ -19,6 +19,25 @@
 
     <uses-feature android:name="android.hardware.wifi" android:required="true" />
 
+    <!-- Pre-31: normal permissions, granted at install, needed to use the
+         Bluetooth APIs at all. Capped with maxSdkVersion because API 31+
+         replaces both with the runtime permissions below. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+
+    <!-- API 31+: scanning under neverForLocation, since this app never derives
+         location from BLE results (see the Bluetooth hunting amendment). -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+    <!-- Needed to read a device's cached name via BluetoothDevice.getName()
+         when the advertisement itself carries none. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- Not required: a device with no Bluetooth radio still gets a working
+         WiFi meter, it just cannot open the HUNT tab. -->
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+
     <application
         android:label="Signal Boy"
         android:icon="@mipmap/ic_launcher"

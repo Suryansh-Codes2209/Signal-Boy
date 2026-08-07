@@ -184,7 +184,14 @@ export const PLATFORMS = {
       noiseFloor: { support: SUPPORT.NONE, detail: 'AOSP exposes no noise floor, so SNR cannot be computed.' },
       lanScan: { support: SUPPORT.NONE, detail: 'No Node runtime in the APK; raw sockets are unavailable to a WebView.' },
       mdns: { support: SUPPORT.NONE, detail: 'No Node runtime in the APK.' },
-      bleScan: { support: SUPPORT.NONE, detail: 'Not wired up. The APK ships WiFi sensing only.' },
+      bleScan: {
+        support: SUPPORT.FULL,
+        via: 'BluetoothLeScanner.startScan()',
+        detail:
+          'Continuous, no OS throttle -- unlike the WiFi scan above. Finds only devices that advertise; hidden cameras are ' +
+          'usually WiFi, not BLE. No distance is derived, RSSI only. Most trackers rotate their MAC every ~15 min, so a ' +
+          'device is followable within that window, not across a long hunt.',
+      },
       camera: {
         support: SUPPORT.NONE,
         detail: 'getUserMedia needs android.permission.CAMERA plus a WebChromeClient.onPermissionRequest handler. Neither is planned; the APK ships WiFi sensing only.',

@@ -561,3 +561,41 @@ canvas {
 /* De-emphasised: it earns its own line (two networks can share an SSID, and
    this is the only thing telling them apart) but not a column beside dBm. */
 .ap-bssid  { grid-area: bssid; color: var(--lcd-1); }
+
+/* HUNT: one row per BLE advertisement. Same grid shape as .ap above -- kept
+   as its own class set rather than shared, so a future change to one list
+   cannot silently reach into the other. */
+.ble-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--u);
+  margin-bottom: var(--u);
+}
+
+.ble-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--u);
+}
+
+.ble-row {
+  display: grid;
+  grid-template-columns: var(--u) 1fr auto;
+  grid-template-areas:
+    'swatch name rssi'
+    'swatch meta meta'
+    'swatch addr addr';
+  gap: 0 var(--u);
+  align-items: center;
+  border: var(--border) solid var(--lcd-0);
+  padding: var(--u);
+}
+
+.ble-swatch { grid-area: swatch; align-self: stretch; }
+.ble-name   { grid-area: name; }
+.ble-rssi   { grid-area: rssi; }
+.ble-meta   { grid-area: meta; color: var(--lcd-1); }
+/* The address is the only thing distinguishing two unnamed devices, and it
+   rotates on modern trackers besides -- own line, not a column beside dBm,
+   same reasoning as .ap-bssid. */
+.ble-addr   { grid-area: addr; color: var(--lcd-1); }
