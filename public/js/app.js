@@ -5,6 +5,7 @@ import { createCompanion } from './companion.js';
 import { createLiveView } from './views/live.js';
 import { createPlatformView } from './views/platform.js';
 import { createWalkView } from './views/walk.js';
+import { createApsView } from './views/aps.js';
 
 /**
  * Application shell: fetches platform info, registers views and routes the
@@ -17,6 +18,7 @@ import { createWalkView } from './views/walk.js';
 const VIEWS = [
   { id: 'walk', label: 'WALK', create: createWalkView },
   { id: 'live', label: 'LIVE', create: createLiveView },
+  { id: 'aps', label: 'NEARBY', create: createApsView },
   { id: 'platform', label: 'PLATFORM', create: createPlatformView },
 ];
 

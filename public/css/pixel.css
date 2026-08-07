@@ -490,3 +490,35 @@ canvas {
   background: var(--lcd-1);
   color: var(--lcd-3);
 }
+
+/* NEARBY: one row per access point, on the same 8px grid as everything else. */
+.aps-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--u);
+  margin-bottom: var(--u);
+}
+
+.aps-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--u);
+}
+
+.ap {
+  display: grid;
+  grid-template-columns: var(--u) 1fr auto;
+  grid-template-areas:
+    'swatch ssid rssi'
+    'swatch meta bssid';
+  gap: 0 var(--u);
+  align-items: center;
+  border: var(--border) solid var(--lcd-0);
+  padding: var(--u);
+}
+
+.ap-swatch { grid-area: swatch; align-self: stretch; }
+.ap-ssid   { grid-area: ssid; }
+.ap-rssi   { grid-area: rssi; }
+.ap-meta   { grid-area: meta; color: var(--lcd-1); }
+.ap-bssid  { grid-area: bssid; color: var(--lcd-1); text-align: right; }
