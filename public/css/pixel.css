@@ -236,11 +236,25 @@ canvas {
   white-space: nowrap;
 }
 
-.tab:hover:not(:disabled) {
-  background: var(--lcd-3);
+/* Hover only means something with a real pointer. Touch devices don't clear
+   :hover the way a mouse leaving does -- it sticks to whatever was last
+   tapped until something else is tapped. Without this guard,
+   .tab:hover:not(:disabled) (specificity 0,3,0) outranks
+   .tab[aria-selected="true"] (0,2,0), so the tab you just tapped keeps its
+   hover background forever: [aria-selected="true"] still wins the `color`
+   fight, so the label ends up the same colour as its own background.
+   Any hover rule added to this file needs this same guard. */
+@media (hover: hover) {
+  .tab:hover:not(:disabled) {
+    background: var(--lcd-3);
+  }
 }
 
-.tab[aria-selected="true"] {
+/* Qualified with .tabs (not just .tab) so the selected tab's background
+   wins on specificity (0,3,0) rather than on rule order alone -- it must
+   not go blank again if a bare `.tab:hover` is ever reintroduced without
+   the @media guard above. */
+.tabs .tab[aria-selected="true"] {
   background: var(--lcd-0);
   color: var(--lcd-3);
 }
@@ -409,7 +423,12 @@ canvas {
   border: var(--border) solid var(--lcd-0);
   cursor: pointer;
 }
-.btn:hover { background: var(--lcd-3); }
+/* Same sticky-:hover problem as .tab above -- without the guard, SCAN and
+   MUTE stay lit at --lcd-3 after the tap that pressed them, instead of the
+   highlight clearing like it would when a mouse moves off. */
+@media (hover: hover) {
+  .btn:hover { background: var(--lcd-3); }
+}
 .btn[aria-pressed="true"] { background: var(--lcd-0); color: var(--lcd-3); }
 
 .row {
