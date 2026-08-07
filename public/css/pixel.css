@@ -430,6 +430,16 @@ canvas {
   letter-spacing: 0.03em;
 }
 
+/* Views clear a `.note` to `''` when the caveat it held no longer applies
+   (see aps.js, walk.js) rather than removing the element, so the box, border
+   and margin above must collapse to nothing whenever there is no text left
+   to accent. */
+.note:empty {
+  margin: 0;
+  padding: 0;
+  border-left: 0;
+}
+
 .note strong {
   text-transform: uppercase;
   letter-spacing: 0.12em;
