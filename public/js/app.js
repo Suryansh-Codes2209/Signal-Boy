@@ -7,6 +7,8 @@ import { createPlatformView } from './views/platform.js';
 import { createWalkView } from './views/walk.js';
 import { createApsView } from './views/aps.js';
 import { createBleView } from './views/ble.js';
+import { createCellView } from './views/cell.js';
+import { createLinkView } from './views/link.js';
 
 /**
  * Application shell: fetches platform info, registers views and routes the
@@ -21,6 +23,8 @@ const VIEWS = [
   { id: 'live', label: 'LIVE', create: createLiveView },
   { id: 'aps', label: 'NEARBY', create: createApsView },
   { id: 'ble', label: 'HUNT', create: createBleView },
+  { id: 'cell', label: 'CELL', create: createCellView },
+  { id: 'link', label: 'LINK', create: createLinkView },
   { id: 'platform', label: 'PLATFORM', create: createPlatformView },
 ];
 

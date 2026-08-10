@@ -38,6 +38,25 @@
          WiFi meter, it just cannot open the HUNT tab. -->
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
 
+    <!-- RANGE (Android 16+): true distance to a peer whose radio answers, via
+         RangingManager. Unlike every other reading in HUNT this is measured,
+         not inferred from RSSI, which is exactly why it needs its own grant.
+         Declared unconditionally because the platform ignores an unknown
+         permission below API 36; RangeBridge gates the request itself. -->
+    <uses-permission android:name="android.permission.RANGING" />
+
+    <!-- CELL: read-only cellular telemetry (serving/neighbour cells, band,
+         RSRP/RSRQ). READ_PHONE_STATE plus the location grant above are what
+         TelephonyManager.getAllCellInfo() needs to return cell identity. No
+         transmit capability is requested or possible; the modem is read only. -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
+
+    <!-- LINK (active test only): the app is otherwise fully offline. This is
+         requested solely for the opt-in throughput/latency test in the LINK tab,
+         which does nothing until the user accepts its consent gate. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:label="Signal Boy"
         android:icon="@mipmap/ic_launcher"
