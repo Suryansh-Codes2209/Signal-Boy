@@ -267,6 +267,40 @@
         display: block;
       }
 
+      /* ---------- screenshots ---------- */
+
+      .shots {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: calc(var(--u) * 2);
+        margin-bottom: calc(var(--u) * 2);
+        align-items: start;
+      }
+
+      .shots figure {
+        margin: 0;
+        border: var(--border) solid var(--lcd-0);
+        background: var(--lcd-0);
+      }
+
+      /* The app draws on a hard pixel grid, so the browser must not smooth it
+         when the image lands on a fractional width. Every other rule here is
+         cosmetic; this one is the difference between the screenshot looking
+         like the app and looking like a photograph of it. */
+      .shots img {
+        display: block;
+        width: 100%;
+        height: auto;
+        image-rendering: pixelated;
+      }
+
+      .shots figcaption {
+        padding: var(--u) calc(var(--u) * 1.5);
+        background: var(--lcd-0);
+        color: var(--lcd-3);
+        font-size: 12px;
+      }
+
       /* ---------- tables ---------- */
 
       .scroller {
@@ -414,11 +448,42 @@
           </a>
           <p class="note">
             The Android app reads <code>WifiManager</code> directly — exact dBm for your own
-            connection, exact dBm for every nearby access point, plus BLE device hunting by audio
-            and radar. It never shows a distance; no BLE or WiFi radio measurement supports one.
-            Installing it needs allowing installs from your browser once.
+            connection, exact dBm for every nearby access point, plus BLE hunting, cellular
+            telemetry and link testing. It shows a distance only when the radio actually measured
+            one, never inferred from signal strength. Installing it needs allowing installs from
+            your browser once.
           </p>
         </header>
+
+        <div class="shots">
+          <figure>
+            <img
+              src="/shots/hunt-tracker.png"
+              width="720"
+              height="982"
+              loading="lazy"
+              decoding="async"
+              alt="The HUNT proximity display: a dark phosphor field with concentric range arcs, a
+                   bright contact ring around a centre cross, and the caption NO DIRECTION."
+            />
+            <figcaption>
+              HUNT, tracking one device. The contact is a ring, never a dot — a ring says
+              &ldquo;the reading matches this radius&rdquo;, true at every angle at once.
+            </figcaption>
+          </figure>
+          <figure>
+            <img
+              src="/shots/live-meter.png"
+              width="620"
+              height="1315"
+              loading="lazy"
+              decoding="async"
+              alt="The Android app showing seven tabs and a live WiFi reading of minus 38 dBm,
+                   graded EXCELLENT, with a signal bar strip beneath it."
+            />
+            <figcaption>The Android app reading its own radio. No daemon, no laptop, no network.</figcaption>
+          </figure>
+        </div>
 
         <h2>What it does</h2>
         <p>
@@ -501,6 +566,41 @@
           more.
         </p>
 
+        <h2>What the Android app adds</h2>
+        <p>
+          The APK is not a viewer for the daemon — it measures with the radios in your hand, and it
+          carries four things a laptop cannot do.
+        </p>
+        <ul>
+          <li>
+            <strong>HUNT</strong> — finds Bluetooth devices that advertise, names them where the
+            advertisement allows (Eddystone, Apple Find My, vendor), and tracks one by tone and the
+            display above. Trackers rotate their address every ~15 minutes, so a lost track offers
+            you a likely continuation — offered, never adopted automatically, because it is a guess.
+          </li>
+          <li>
+            <strong>RANGE</strong> — a real distance in metres, on Android 16 and newer, over
+            Bluetooth Channel Sounding. Timed, not inferred from signal strength. It needs a peer
+            whose radio answers; most devices cannot, and it says so rather than guessing.
+          </li>
+          <li>
+            <strong>CELL</strong> — serving and neighbour cells, band, RSRP and RSRQ. Read-only, and
+            it could not be otherwise: the baseband is locked firmware with no transmit path any app
+            can reach.
+          </li>
+          <li>
+            <strong>LINK</strong> — how steady your connection is over time, measured without
+            sending anything, plus an opt-in latency and throughput test. That test is the only part
+            of this app that puts a packet on the wire, and the only part behind a consent gate.
+          </li>
+        </ul>
+        <p>
+          <strong>NEARBY</strong> also gained a busiest-channel summary, rogue-AP detection (one
+          network name advertising from hardware addresses that disagree) and a channel-power chart
+          — which is not a spectrum, because the radio reports one reading per access point rather
+          than a swept trace.
+        </p>
+
         <h2>Options</h2>
         <pre>npx signalboy --https           # serve over TLS (see below)
 npx signalboy --port 8080       # bind a specific port
@@ -551,6 +651,7 @@ npx signalboy --help</pre>
                 <th scope="col">macOS</th>
                 <th scope="col">Windows</th>
                 <th scope="col">Linux</th>
+                <th scope="col">Android app</th>
               </tr>
             </thead>
             <tbody>
@@ -559,16 +660,19 @@ npx signalboy --help</pre>
                 <td class="yes">Exact</td>
                 <td class="yes">Yes</td>
                 <td class="yes">Exact</td>
+                <td class="yes">Exact</td>
               </tr>
               <tr>
                 <th scope="row">Scan all APs</th>
                 <td class="no">No</td>
                 <td class="yes">Full</td>
                 <td class="yes">Partial</td>
+                <td class="yes">Full</td>
               </tr>
               <tr>
                 <th scope="row">See own SSID</th>
                 <td class="no">No</td>
+                <td class="yes">Yes</td>
                 <td class="yes">Yes</td>
                 <td class="yes">Yes</td>
               </tr>
@@ -577,6 +681,28 @@ npx signalboy --help</pre>
                 <td class="yes">Yes</td>
                 <td class="no">No</td>
                 <td class="yes">Driver</td>
+                <td class="no">No</td>
+              </tr>
+              <tr>
+                <th scope="row">BLE hunting</th>
+                <td class="no">No</td>
+                <td class="no">No</td>
+                <td class="no">No</td>
+                <td class="yes">Yes</td>
+              </tr>
+              <tr>
+                <th scope="row">Cell info</th>
+                <td class="no">No</td>
+                <td class="no">No</td>
+                <td class="no">No</td>
+                <td class="yes">Yes</td>
+              </tr>
+              <tr>
+                <th scope="row">True distance</th>
+                <td class="no">No</td>
+                <td class="no">No</td>
+                <td class="no">No</td>
+                <td class="yes">Android 16+</td>
               </tr>
             </tbody>
           </table>
