@@ -38,6 +38,6 @@
   ],
   "scripts": {
     "start": "node bin/signalboy.js",
-    "test": "node --test"
+    "test": "node --test \"test/**/*.test.js\""
   }
 }
