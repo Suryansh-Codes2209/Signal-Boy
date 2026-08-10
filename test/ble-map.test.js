@@ -32,6 +32,26 @@ test('a device carries its measured fields straight through', () => {
   assert.equal(mapped.lastSeen, 1712345678000);
 });
 
+test('advertised identity (service UUIDs, manufacturer data) is carried through for classification', () => {
+  const mapped = mapDevice({
+    address: 'AA:BB:CC:DD:EE:05',
+    rssi: -50,
+    serviceUuids: ['0000feaa-0000-1000-8000-00805f9b34fb'],
+    manufacturerId: 0x004c,
+    manufacturerData: '1219abcd',
+  });
+  assert.deepEqual(mapped.serviceUuids, ['0000feaa-0000-1000-8000-00805f9b34fb']);
+  assert.equal(mapped.manufacturerId, 0x004c);
+  assert.equal(mapped.manufacturerData, '1219abcd');
+});
+
+test('a device advertising no identity gets empty/null identity fields, never guesses', () => {
+  const mapped = mapDevice({ address: 'AA:BB:CC:DD:EE:06', rssi: -50 });
+  assert.deepEqual(mapped.serviceUuids, []);
+  assert.equal(mapped.manufacturerId, null);
+  assert.equal(mapped.manufacturerData, null);
+});
+
 test('no distance field exists anywhere on a mapped device', () => {
   // BLE tx power varies wildly by device, so a metre figure would be
   // invented, not measured -- this is the central rule the whole module

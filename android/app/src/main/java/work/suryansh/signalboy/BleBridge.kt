@@ -70,6 +70,21 @@ class BleBridge(
                 // crossing the same bridge. This is still a raw fact (when the
                 // bridge itself saw the advertisement), not an interpretation.
                 put("timestamp", System.currentTimeMillis())
+                // Advertised identity, forwarded raw for beacon-classify.js and
+                // the MAC-rotation re-association heuristic. Interpretation (what
+                // an Eddystone UUID or an Apple Find My type byte means) lives in
+                // JS, same as every other judgment this bridge refuses to make.
+                put("serviceUuids", serviceUuids(record))
+                val msd = record?.manufacturerSpecificData
+                if (msd != null && msd.size() > 0) {
+                    // First manufacturer-specific entry: company id (key) plus its
+                    // bytes as hex. A device usually carries exactly one.
+                    put("manufacturerId", msd.keyAt(0))
+                    put("manufacturerData", bytesToHex(msd.valueAt(0)))
+                } else {
+                    put("manufacturerId", JSONObject.NULL)
+                    put("manufacturerData", JSONObject.NULL)
+                }
             }
             synchronized(lock) { devices[result.device.address] = entry }
         }
@@ -77,6 +92,20 @@ class BleBridge(
         override fun onScanFailed(errorCode: Int) {
             synchronized(lock) { scanning = false }
         }
+    }
+
+    /** Advertised 128-bit service UUID strings, or an empty array when none. */
+    private fun serviceUuids(record: android.bluetooth.le.ScanRecord?): JSONArray {
+        val arr = JSONArray()
+        record?.serviceUuids?.forEach { arr.put(it.uuid.toString()) }
+        return arr
+    }
+
+    /** Lowercase hex of a byte array, e.g. Apple's manufacturer-specific data. */
+    private fun bytesToHex(bytes: ByteArray): String {
+        val sb = StringBuilder(bytes.size * 2)
+        for (b in bytes) sb.append(String.format("%02x", b))
+        return sb.toString()
     }
 
     /**

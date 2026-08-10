@@ -95,3 +95,78 @@ test('stdDev matches a hand-computed sample standard deviation', () => {
   assert.equal(stdDev([42]), 0);
   assert.equal(stdDev([]), 0);
 });
+
+/* ---------- adaptive Kalman + outlier gate (BLE hunting) ---------- */
+
+test('default Kalman1D still matches the original formula exactly (backward compatible)', () => {
+  // The desktop/WiFi call sites construct Kalman1D() with no options and must
+  // be byte-for-byte unchanged by the adaptive/gate additions. Recompute the
+  // documented formula here and assert the class agrees.
+  const q = 0.01;
+  const r = 6;
+  let x = null;
+  let p = 100;
+  const ref = (z) => {
+    if (x === null) {
+      x = z;
+      p = r;
+      return x;
+    }
+    p += q;
+    const k = p / (p + r);
+    x += k * (z - x);
+    p = (1 - k) * p;
+    return x;
+  };
+
+  const kalman = new Kalman1D();
+  for (const z of [-60, -64, -58, -70, -55, -62, -61, -59, -63, -60]) {
+    assert.ok(Math.abs(kalman.update(z) - ref(z)) < 1e-9, 'default path must match the original');
+  }
+});
+
+test('the outlier gate rejects a lone spike instead of chasing it', () => {
+  const kalman = new Kalman1D({ outlierGate: 3 });
+  for (let i = 0; i < 30; i++) kalman.update(-60); // settle
+  const before = kalman.value;
+  kalman.update(-10); // absurd single reading -- a reflection or a decode error
+  assert.ok(Math.abs(kalman.value - before) < 2, `a spike should barely move the estimate (${kalman.value})`);
+});
+
+test('the outlier gate still follows a genuine sustained shift (never gets stuck)', () => {
+  const kalman = new Kalman1D({ outlierGate: 3, maxRejects: 3 });
+  for (let i = 0; i < 30; i++) kalman.update(-60);
+  for (let i = 0; i < 40; i++) kalman.update(-30); // the target really moved closer, and stayed
+  assert.ok(Math.abs(kalman.value - -30) < 3, `must eventually track the new level (${kalman.value})`);
+});
+
+test('adaptive mode reaches a step change in fewer samples than fixed gain', () => {
+  const samplesToSettle = (opts) => {
+    const kalman = new Kalman1D(opts);
+    for (let i = 0; i < 30; i++) kalman.update(-70);
+    let n = 0;
+    while (Math.abs(kalman.value - -50) > 2 && n < 500) {
+      kalman.update(-50);
+      n++;
+    }
+    return n;
+  };
+  const fixed = samplesToSettle({});
+  const adaptive = samplesToSettle({ adaptive: true });
+  assert.ok(adaptive < fixed, `adaptive (${adaptive}) should track the step before fixed (${fixed})`);
+});
+
+test('adaptive mode does not mistake alternating noise for a trend', () => {
+  const kalman = new Kalman1D({ adaptive: true });
+  const noise = [4, -3, 5, -5, 2, -2, 6, -6, 1, -1];
+  for (let i = 0; i < 200; i++) kalman.update(-62 + noise[i % noise.length]);
+  assert.ok(Math.abs(kalman.value - -62) < 2, `should stay near truth on jitter, got ${kalman.value}`);
+});
+
+test('reset clears adaptive and gate state, not just the estimate', () => {
+  const kalman = new Kalman1D({ adaptive: true, outlierGate: 3 });
+  for (let i = 0; i < 10; i++) kalman.update(-60);
+  kalman.reset();
+  assert.equal(kalman.value, null);
+  assert.equal(kalman.update(-42), -42, 'the first sample after reset is adopted verbatim');
+});

@@ -26,6 +26,12 @@ export function mapDevice(raw) {
     txPower: raw.txPower ?? null,
     connectable: raw.connectable === true,
     lastSeen: raw.timestamp ?? null,
+    // Advertised identity, used by beacon-classify.js and the MAC-rotation
+    // re-association heuristic -- never to derive distance. Absent fields stay
+    // empty/null; the mapper invents nothing.
+    serviceUuids: Array.isArray(raw.serviceUuids) ? raw.serviceUuids : [],
+    manufacturerId: raw.manufacturerId ?? null,
+    manufacturerData: raw.manufacturerData ?? null,
   };
 }
 
