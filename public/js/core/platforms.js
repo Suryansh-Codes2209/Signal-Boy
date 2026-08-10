@@ -56,6 +56,10 @@ export const PLATFORMS = {
       lanScan: { support: SUPPORT.FULL, via: 'ping sweep + arp' },
       mdns: { support: SUPPORT.FULL, via: 'native UDP 5353' },
       bleScan: { support: SUPPORT.PARTIAL, detail: 'Needs a native CoreBluetooth binding; macOS will prompt for Bluetooth permission.' },
+      cellInfo: { support: SUPPORT.NONE, detail: 'Desktops and laptops have no cellular modem.' },
+      linkQuality: { support: SUPPORT.FULL, detail: 'Stability and variance of the connected reading over time -- no packets sent.' },
+      activeThroughput: { support: SUPPORT.NONE, detail: 'The opt-in active throughput test is built for the APK only.' },
+      ranging: { support: SUPPORT.NONE, detail: 'Desktop WiFi and Bluetooth stacks expose no ranging API.' },
       camera: { support: SUPPORT.FULL, detail: 'Front-facing webcam only -- awkward for sweeping a room.' },
       magnetometer: { support: SUPPORT.NONE, detail: 'No magnetometer in Mac hardware.' },
     },
@@ -83,6 +87,10 @@ export const PLATFORMS = {
       lanScan: { support: SUPPORT.FULL, via: 'ping sweep + arp -a' },
       mdns: { support: SUPPORT.FULL, via: 'native UDP 5353' },
       bleScan: { support: SUPPORT.PARTIAL, detail: 'Needs a native binding, or Web Bluetooth in Chrome.' },
+      cellInfo: { support: SUPPORT.NONE, detail: 'Desktops and laptops have no cellular modem.' },
+      linkQuality: { support: SUPPORT.FULL, detail: 'Stability and variance of the connected reading over time -- no packets sent.' },
+      activeThroughput: { support: SUPPORT.NONE, detail: 'The opt-in active throughput test is built for the APK only.' },
+      ranging: { support: SUPPORT.NONE, detail: 'Desktop WiFi and Bluetooth stacks expose no ranging API.' },
       camera: { support: SUPPORT.FULL },
       magnetometer: { support: SUPPORT.NONE },
     },
@@ -110,6 +118,10 @@ export const PLATFORMS = {
       lanScan: { support: SUPPORT.FULL, via: 'ping sweep + ip neigh' },
       mdns: { support: SUPPORT.FULL, via: 'native UDP 5353' },
       bleScan: { support: SUPPORT.PARTIAL, detail: 'Via BlueZ; may need capabilities granted to the node binary.' },
+      cellInfo: { support: SUPPORT.NONE, detail: 'Desktops and laptops have no cellular modem.' },
+      linkQuality: { support: SUPPORT.FULL, detail: 'Stability and variance of the connected reading over time -- no packets sent.' },
+      activeThroughput: { support: SUPPORT.NONE, detail: 'The opt-in active throughput test is built for the APK only.' },
+      ranging: { support: SUPPORT.NONE, detail: 'Desktop WiFi and Bluetooth stacks expose no ranging API.' },
       camera: { support: SUPPORT.FULL },
       magnetometer: { support: SUPPORT.NONE },
     },
@@ -132,6 +144,10 @@ export const PLATFORMS = {
         via: 'Web Bluetooth requestLEScan',
         detail: 'Chrome on Android, with chrome://flags/#enable-experimental-web-platform-features enabled.',
       },
+      cellInfo: { support: SUPPORT.NONE, detail: 'No browser API exposes cell info; the Android APK reads it instead.' },
+      linkQuality: { support: SUPPORT.PARTIAL, detail: "Shows the host daemon's link stability, not this device's own radio." },
+      activeThroughput: { support: SUPPORT.NONE, detail: 'The native throughput test is APK-only; a browser cannot run it.' },
+      ranging: { support: SUPPORT.NONE, detail: 'No browser API exposes ranging; the Android APK reads it instead.' },
       camera: { support: SUPPORT.FULL, detail: 'Rear camera makes lens-glint sweeping genuinely practical.' },
       magnetometer: {
         support: SUPPORT.PARTIAL,
@@ -154,6 +170,10 @@ export const PLATFORMS = {
       lanScan: { support: SUPPORT.NONE },
       mdns: { support: SUPPORT.NONE },
       bleScan: { support: SUPPORT.NONE, detail: 'Safari does not implement Web Bluetooth and Apple has stated it will not.' },
+      cellInfo: { support: SUPPORT.NONE, detail: 'Safari exposes no telephony API.' },
+      linkQuality: { support: SUPPORT.PARTIAL, detail: "Shows the host daemon's link stability, not this device's own radio." },
+      activeThroughput: { support: SUPPORT.NONE, detail: 'The native throughput test is APK-only; a browser cannot run it.' },
+      ranging: { support: SUPPORT.NONE, detail: 'No browser API exposes ranging; the Android APK reads it instead.' },
       camera: { support: SUPPORT.FULL, detail: 'Rear camera works for lens-glint sweeping.' },
       magnetometer: { support: SUPPORT.NONE, detail: 'Safari does not expose the Magnetometer API.' },
     },
@@ -200,6 +220,35 @@ export const PLATFORMS = {
         support: SUPPORT.PARTIAL,
         detail: 'The Magnetometer API is behind a Chrome flag and is not exposed in a WebView by default, same as the android (browser) entry on the same handset.',
       },
+      cellInfo: {
+        support: SUPPORT.FULL,
+        via: 'TelephonyManager.getAllCellInfo()',
+        detail:
+          'Read-only serving and neighbour cells with band and RSRP/RSRQ. Needs READ_PHONE_STATE plus the ' +
+          'location grant for cell identity. There is no transmit path -- the baseband is locked firmware, so ' +
+          'the modem can be read but never made to emit.',
+      },
+      linkQuality: {
+        support: SUPPORT.FULL,
+        via: 'WifiManager',
+        detail: 'Passive stability of the connected RSSI and link rate over time -- reads the radio, sends no packets.',
+      },
+      activeThroughput: {
+        support: SUPPORT.FULL,
+        via: 'HttpURLConnection',
+        detail:
+          'Opt-in latency/jitter/throughput test against a URL you enter. Adds the INTERNET permission and runs ' +
+          'only after an explicit on-screen consent gate; the app is otherwise fully offline.',
+      },
+      ranging: {
+        support: SUPPORT.PARTIAL,
+        via: 'RangingManager',
+        detail:
+          'True measured distance in metres, not an RSSI guess -- the one reading in HUNT that is timed rather ' +
+          'than inferred. Needs Android 16, and needs the peer to answer: a device whose radio does not ' +
+          'implement Channel Sounding simply produces no fix, which is most of what HUNT finds. UWB is not ' +
+          'used yet, so there is still no direction.',
+      },
     },
   },
 };
@@ -213,6 +262,10 @@ export const CAPABILITY_KEYS = [
   'lanScan',
   'mdns',
   'bleScan',
+  'cellInfo',
+  'linkQuality',
+  'activeThroughput',
+  'ranging',
   'camera',
   'magnetometer',
 ];
@@ -225,6 +278,10 @@ export const CAPABILITY_LABELS = {
   lanScan: 'LAN SCAN',
   mdns: 'MDNS',
   bleScan: 'BLE SCAN',
+  cellInfo: 'CELL INFO',
+  linkQuality: 'LINK QUALITY',
+  activeThroughput: 'THROUGHPUT TEST',
+  ranging: 'TRUE DISTANCE',
   camera: 'CAMERA',
   magnetometer: 'MAGNETOMETER',
 };

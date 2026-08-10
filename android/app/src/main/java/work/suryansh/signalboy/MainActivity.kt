@@ -48,6 +48,9 @@ class MainActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var bridge: WifiBridge
     private lateinit var bleBridge: BleBridge
+    private lateinit var cellBridge: TelephonyBridge
+    private lateinit var netTestBridge: NetTestBridge
+    private lateinit var rangeBridge: RangeBridge
     private var pushing = false
 
     /** Matches SIGNALBOY_WIFI_INTERVAL's default in the daemon. */
@@ -58,10 +61,12 @@ class MainActivity : AppCompatActivity() {
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
             // The JS side re-reads the grants rather than trusting this payload,
-            // so the two can never disagree. Both hooks are called unconditionally
+            // so the two can never disagree. Every hook is called unconditionally
             // -- whichever one the page hasn't defined is just a no-op via `?.`.
             webView.evaluateJavascript("window.__signalboyPermissions?.()", null)
             webView.evaluateJavascript("window.__signalboyBlePermissions?.()", null)
+            webView.evaluateJavascript("window.__signalboyCellPermissions?.()", null)
+            webView.evaluateJavascript("window.__signalboyRangePermissions?.()", null)
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -135,6 +140,22 @@ class MainActivity : AppCompatActivity() {
 
         bleBridge = BleBridge(this) { requestBlePermissions() }
         webView.addJavascriptInterface(bleBridge, "SignalBoyBle")
+
+        cellBridge = TelephonyBridge(this) { requestCellPermissions() }
+        webView.addJavascriptInterface(cellBridge, "SignalBoyCell")
+
+        // The active LINK test. No runtime permission path: INTERNET is an
+        // install-time permission, and the test itself is gated behind an
+        // on-screen consent step in views/link.js -- it sends nothing until then.
+        netTestBridge = NetTestBridge()
+        webView.addJavascriptInterface(netTestBridge, "SignalBoyNetTest")
+
+        // RANGE. Registered on every device, including the pre-Android-16 ones
+        // that can never range: the bridge answers REQUIRES_ANDROID_16 and the
+        // UI says so, which is more useful than a missing object that JS can
+        // only report as a generic absence.
+        rangeBridge = RangeBridge(this) { requestRangePermissions() }
+        webView.addJavascriptInterface(rangeBridge, "SignalBoyRange")
 
         // Same lcd-3 + bot-foreground pairing as Theme.App.Starting, so the
         // handoff from the cold-launch system splash to this overlay is
@@ -249,19 +270,53 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * CELL telemetry needs READ_PHONE_STATE for the modem's own state and the
+     * location grant for cell identity (Android treats cell IDs as location
+     * data, the same way it treats WiFi identity). Same main-thread post as the
+     * others. Requested only when the CELL tab asks -- never at launch.
+     */
+    private fun requestCellPermissions() {
+        handler.post {
+            permissionLauncher.launch(
+                arrayOf(Manifest.permission.READ_PHONE_STATE, Manifest.permission.ACCESS_FINE_LOCATION),
+            )
+        }
+    }
+
+    /**
+     * RANGING exists only from API 36, and launching a request for a permission
+     * the platform has never heard of returns a denial that reads exactly like a
+     * user refusal. Gating here keeps "your Android is too old" and "you said no"
+     * distinguishable, which is the whole reason RangeBridge reports them as
+     * separate codes. Same main-thread post as the others.
+     */
+    private fun requestRangePermissions() {
+        handler.post {
+            if (Build.VERSION.SDK_INT >= 36) {
+                permissionLauncher.launch(arrayOf(Manifest.permission.RANGING))
+            }
+        }
+    }
+
+    /**
      * An unthrottled BLE scan left running while the app is backgrounded is a
      * pure battery cost with no one watching the result. The JS side already
      * stops its own poll loop on visibilitychange, but that is a cooperative
      * signal a page could fail to act on; this is the same stop enforced at the
      * platform level regardless of what the page does.
+     *
+     * A ranging session is the more expensive of the two -- it keeps a radio
+     * link up rather than just listening -- so it stops here for the same reason.
      */
     override fun onPause() {
         super.onPause()
         bleBridge.stopScan()
+        rangeBridge.stopSession()
     }
 
     override fun onDestroy() {
         bleBridge.stopScan()
+        rangeBridge.stopSession()
         handler.removeCallbacksAndMessages(null)
         webView.destroy()
         super.onDestroy()

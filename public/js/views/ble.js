@@ -5,6 +5,11 @@ import { Kalman1D } from '../core/filter.js';
 import { createBleSource, bleBridge } from '../sources/ble.js';
 import { createAudioControls } from '../audio/controls.js';
 import { PixelRadar } from '../render/radar.js';
+import { decayPeak, trendFromDelta } from '../render/radar-map.js';
+import { classifyBeacon } from '../sources/beacon-classify.js';
+import { reassociate } from '../sources/reassociate.js';
+import { rangeBridge, createRangeSource } from '../sources/range.js';
+import { rememberFirstSeen, orderForDisplay, capList, DEFAULT_LIST_CAP } from '../sources/device-order.js';
 
 /**
  * BLE hunting: every advertising device nearby, loudest first, refreshed
@@ -54,7 +59,18 @@ export function createBleView(root, context) {
   const limits = el('p', { class: 'note', text: LIMITS_NOTE });
   const audio = createAudioControls('hunt');
   const tracking = el('p', { class: 'note ble-tracking' });
+  // Shown only when a lost track has a plausible rotated-MAC continuation.
+  // Tapping it adopts the candidate as a fresh selection -- never automatic,
+  // because a re-association is a guess (see reassociate.js).
+  const reacquireBtn = el('button', { class: 'btn ble-reacquire hidden', type: 'button' });
   const selectHint = el('p', { class: 'note', text: 'TAP A DEVICE BELOW TO TRACK IT WITH AUDIO.' });
+
+  // Session log: every address seen since START, with what it looks like and
+  // how long it has been around. Distinct from the live list (which only shows
+  // what is advertising right now) -- this is the "map" of the whole hunt.
+  const trackedBody = el('div', { class: 'panel-body' });
+  const trackedPanel = el('div', { class: 'panel hidden' }, el('h2', { text: 'TRACKED THIS SESSION' }), trackedBody);
+  const session = new Map();
 
   // The canvas paints the peak-hold ring but a screen reader gets nothing
   // from it -- aria-hidden here, with radarStatus below as the text
@@ -70,18 +86,50 @@ export function createBleView(root, context) {
   const radarWrap = el('div', { class: 'radar-wrap hidden' }, radarCanvas, radarStatus, radarReset);
   const radar = new PixelRadar(radarCanvas);
 
-  function describeRadar(dbm, peakDbm, lost) {
+  // RANGE: the one reading in this view that is measured rather than inferred.
+  // Everything else here grades RSSI, which is why the panel is kept visually
+  // and structurally separate instead of being folded into the radar's caption
+  // -- a metre figure sitting inside the "NO DIRECTION SHOWN" block would blur
+  // the exact distinction the block exists to draw.
+  const rangeReadout = el('p', { class: 'range-readout', text: '--' });
+  const rangeProvenance = el('p', { class: 'note range-provenance' });
+  const rangeStatus = el('p', { class: 'note', role: 'status', 'aria-live': 'polite' });
+  const rangeBtn = el('button', { class: 'btn', type: 'button', text: 'MEASURE DISTANCE' });
+  const rangePanel = el(
+    'div',
+    { class: 'panel range-panel hidden' },
+    el('h2', { text: 'TRUE DISTANCE' }),
+    el('div', { class: 'panel-body' }, rangeReadout, rangeProvenance, rangeStatus, rangeBtn),
+  );
+
+  function describeRadar(dbm, peakDbm, lost, trend = 'STEADY') {
     const cur = dbm == null ? (lost ? 'LOST' : 'NO READING') : `${Math.round(dbm)} DBM`;
     const peak = peakDbm == null ? '--' : `${Math.round(peakDbm)} DBM`;
-    radarStatus.textContent = `CURRENT ${cur} · PEAK ${peak} · NO DIRECTION SHOWN`;
+    // Trend only means something while there is a live reading -- omit it when
+    // lost so the text equivalent never implies motion the canvas isn't showing.
+    const trendText = dbm == null ? '' : ` · ${trend}`;
+    radarStatus.textContent = `CURRENT ${cur} · PEAK ${peak}${trendText} · NO DIRECTION SHOWN`;
   }
 
+  // Everything about the device you are hunting, gathered above the list.
+  //
+  // The original order put the list first and the radar, tone and range panel
+  // after it. That reads fine with four devices and collapses completely with
+  // seventy: selecting a device moved the thing you selected it *for* below the
+  // fold, so the tap appeared to do nothing. The list is a picker, not the
+  // content -- once something is picked, the pick is the content.
+  const focusWrap = el('div', { class: 'ble-focus hidden' }, tracking, reacquireBtn, radarWrap, rangePanel, audio.el);
+
+  // Revealed only when the cap is actually withholding rows, so it never sits
+  // there advertising nothing.
+  const showAllBtn = el('button', { class: 'btn ble-show-all hidden', type: 'button' });
+
   root.append(
-    el('div', { class: 'ble' }, el('div', { class: 'ble-bar' }, button, count, status), limits, list),
-    audio.el,
+    el('div', { class: 'ble' }, el('div', { class: 'ble-bar' }, button, count, status)),
+    focusWrap,
     selectHint,
-    tracking,
-    radarWrap,
+    el('div', { class: 'ble' }, list, showAllBtn, limits),
+    trackedPanel,
   );
 
   if (unsupported) {
@@ -100,6 +148,9 @@ export function createBleView(root, context) {
   // appearing in mapped.devices -- see updateTracking() below for how that
   // reads as "lost", not as a silent freeze on a stale number.
   let selectedAddress = null;
+  /** Address -> first-sighting index, so the order can be frozen. See device-order.js. */
+  const seenOrder = new Map();
+  let listExpanded = false;
   // Keyed by address so a filter never mixes RSSI samples from two different
   // physical devices; a rotated MAC starts a fresh filter rather than reusing
   // a stale one under the assumption it's still the same radio.
@@ -116,10 +167,21 @@ export function createBleView(root, context) {
   // consumed -- see the reset handler below.
   let lastFiltered = null;
 
+  // For MAC-rotation re-association: what the selected device looked like when
+  // last seen, and which other addresses were on screen alongside it (those
+  // cannot be its rotated continuation, so they are excluded as candidates).
+  let lastTrackedSignature = null;
+  let peersAtLastSight = [];
+
   function filterFor(address) {
     let filter = filters.get(address);
     if (!filter) {
-      filter = new Kalman1D();
+      // BLE RSSI is noisier and the target is being walked around, not held
+      // still next to a fixed AP -- so unlike the WiFi meter's plain filter,
+      // the hunt filter rejects lone spikes (a reflection or a decode glitch)
+      // and opens up when the signal genuinely trends, to track a moving
+      // device without warbling on every stray sample.
+      filter = new Kalman1D({ adaptive: true, outlierGate: 3 });
       filters.set(address, filter);
     }
     return filter;
@@ -138,16 +200,17 @@ export function createBleView(root, context) {
   }
 
   /** Single call site for both the canvas and its text equivalent, so they can never drift apart. */
-  function renderRadar(dbm, lost) {
+  function renderRadar(dbm, lost, variance = null, trend = 'STEADY') {
     showRadar();
-    radar.render({ dbm, peakDbm, lost });
-    describeRadar(dbm, peakDbm, lost);
+    radar.render({ dbm, peakDbm, lost, variance, trend });
+    describeRadar(dbm, peakDbm, lost, trend);
   }
 
   /** Drives the audio engine and the radar from whichever device is selected, or silences both if none is. */
   function updateTracking() {
     if (!selectedAddress) {
       tracking.textContent = '';
+      reacquireBtn.classList.add('hidden');
       audio.update(null);
       hideRadar();
       return;
@@ -163,16 +226,234 @@ export function createBleView(root, context) {
       audio.update(null);
       lastFiltered = null;
       renderRadar(null, true);
+      offerReacquire();
       return;
     }
 
+    reacquireBtn.classList.add('hidden');
     tracking.textContent = `TRACKING ${device.name ?? 'UNNAMED'} (${device.address})`;
-    const filtered = filterFor(selectedAddress).update(device.rssi);
+    const filter = filterFor(selectedAddress);
+    const filtered = filter.update(device.rssi);
+    // Trend is the change since the last shown value; null on the first reading
+    // of a selection (lastFiltered reset) so it starts STEADY, not a jump from
+    // nothing.
+    const trend = trendFromDelta(lastFiltered == null ? null : filtered - lastFiltered);
     audio.update(filtered);
+    // Peak eases back down when the signal stays weaker rather than freezing on
+    // a brief high -- see decayPeak. A genuine new high is still adopted at once.
+    peakDbm = decayPeak(peakDbm, filtered);
     lastFiltered = filtered;
-    if (peakDbm == null || filtered > peakDbm) peakDbm = filtered;
-    renderRadar(filtered, false);
+    // Remember what this device looks like now, so if its address vanishes next
+    // poll we can look for the rotated continuation. Peers seen alongside it are
+    // ruled out -- a device advertising *with* the old address is not it.
+    lastTrackedSignature = {
+      address: selectedAddress,
+      rssi: filtered,
+      txPower: device.txPower,
+      manufacturerId: device.manufacturerId,
+      serviceUuids: device.serviceUuids,
+    };
+    peersAtLastSight = lastMapped.devices.filter((d) => d.address !== selectedAddress).map((d) => d.address);
+    renderRadar(filtered, false, filter.variance, trend);
   }
+
+  /** When a track is lost, look for a plausible rotated-MAC continuation and offer it. */
+  function offerReacquire() {
+    const match = lastTrackedSignature
+      ? reassociate(lastTrackedSignature, lastMapped.devices, { exclude: peersAtLastSight })
+      : null;
+    if (!match) {
+      reacquireBtn.classList.add('hidden');
+      return;
+    }
+    reacquireBtn.textContent = `↺ RE-ACQUIRED? FOLLOW ${match.address} (${Math.round(match.score * 100)}% MATCH)`;
+    reacquireBtn.dataset.address = match.address;
+    reacquireBtn.classList.remove('hidden');
+  }
+
+  /** Roll every currently-visible device into the session log for the TRACKED panel. */
+  function logSession(devices) {
+    for (const d of devices) {
+      if (!d.address) continue;
+      const klass = classifyBeacon(d);
+      const existing = session.get(d.address);
+      if (existing) {
+        existing.lastSeen = d.lastSeen ?? Date.now();
+        existing.count += 1;
+        if (d.name) existing.name = d.name;
+        if (klass.category !== 'unknown') existing.klass = klass;
+      } else {
+        session.set(d.address, {
+          address: d.address,
+          name: d.name ?? null,
+          klass,
+          firstSeen: d.lastSeen ?? Date.now(),
+          lastSeen: d.lastSeen ?? Date.now(),
+          count: 1,
+        });
+      }
+    }
+    renderSession();
+  }
+
+  function renderSession() {
+    clear(trackedBody);
+    if (!session.size) {
+      trackedPanel.classList.add('hidden');
+      return;
+    }
+    trackedPanel.classList.remove('hidden');
+    const rows = [...session.values()].sort((a, b) => (b.lastSeen ?? 0) - (a.lastSeen ?? 0));
+    for (const r of rows) {
+      trackedBody.append(
+        el(
+          'div',
+          { class: 'tracked-row' },
+          el('span', { class: 'tracked-name', text: r.name ?? 'UNNAMED' }),
+          r.klass.category !== 'unknown'
+            ? el('span', { class: 'tracked-class', dataset: { category: r.klass.category }, text: r.klass.label })
+            : null,
+          el('span', { class: 'tracked-count', text: `×${r.count}` }),
+          el('span', { class: 'tracked-addr', text: r.address }),
+        ),
+      );
+    }
+  }
+
+  // ------------------------------------------------------------------ range
+
+  const RANGE_POLL_MS = 500;
+  const CAPS_RETRY_MS = 400;
+
+  const rangeSupport = context.platform?.capabilities?.ranging ?? {};
+  const rangeApi = rangeBridge();
+  // Both must agree, for the same reason the bleScan check above requires both:
+  // the matrix can describe a build this APK is not, and the bridge is absent
+  // in a browser however the matrix reads.
+  const rangingPossible = rangeSupport.support !== 'none' && !!rangeApi;
+  const rangeSource = rangingPossible ? createRangeSource(rangeApi) : null;
+
+  let rangeTimer = null;
+  let ranging = false;
+
+  function stopRanging({ keepStatus = false } = {}) {
+    if (rangeTimer) {
+      clearInterval(rangeTimer);
+      rangeTimer = null;
+    }
+    if (rangeSource && ranging) rangeSource.stopSession();
+    ranging = false;
+    rangeBtn.textContent = 'MEASURE DISTANCE';
+    rangeReadout.textContent = '--';
+    rangeProvenance.textContent = '';
+    if (!keepStatus) rangeStatus.textContent = '';
+  }
+
+  function pollRange() {
+    if (!rangeSource) return;
+    const result = rangeSource.poll();
+
+    if (!result.running) {
+      // A session ending on its own is the expected outcome for a peer whose
+      // radio cannot answer, not a malfunction -- report why and stop, rather
+      // than leaving a dead timer spinning against nothing.
+      stopRanging({ keepStatus: true });
+      rangeStatus.textContent = result.error ?? 'RANGING STOPPED.';
+      return;
+    }
+
+    const peer = result.peers.find((p) => p.peerId === selectedAddress) ?? result.peers[0] ?? null;
+    if (!peer || peer.label == null) {
+      // No fix this tick is a real state. Showing the last number instead would
+      // make a frozen readout indistinguishable from a live one -- the same
+      // failure the WiFi meter's freshness counter exists to prevent.
+      rangeReadout.textContent = '--';
+      rangeProvenance.textContent = 'NO FIX THIS SECOND.';
+      return;
+    }
+
+    rangeReadout.textContent = peer.label;
+    // The provenance line is not decoration: it is what stops an OS-computed
+    // RSSI estimate from reading like a timed measurement.
+    rangeProvenance.textContent = peer.derived
+      ? `${peer.technologyLabel} -- ESTIMATED FROM SIGNAL STRENGTH, NOT MEASURED.`
+      : `${peer.technologyLabel} -- MEASURED${peer.confidence ? ` · ${peer.confidence} CONFIDENCE` : ''}.`;
+  }
+
+  function startRanging() {
+    if (!rangeSource || !selectedAddress) return;
+
+    const caps = rangeSource.capabilities();
+    if (!caps.supported) {
+      rangeStatus.textContent = caps.error;
+      // Capability delivery is asynchronous, so the first answer after launch
+      // is legitimately PENDING. Retrying beats reporting a capable phone as
+      // incapable on the strength of one early poll.
+      if (caps.code === 'CAPABILITIES_PENDING') setTimeout(startRanging, CAPS_RETRY_MS);
+      return;
+    }
+    if (!caps.best) {
+      // Prefer the platform's own reason (switched off, not permitted here)
+      // over a generic line -- only some of those are worth acting on.
+      const off = caps.technologies.find((t) => t.unavailableDetail);
+      rangeStatus.textContent = off?.unavailableDetail ?? 'NO RANGING TECHNOLOGY AVAILABLE ON THIS PHONE.';
+      return;
+    }
+
+    const started = rangeSource.startSession(selectedAddress, caps.best.code);
+    if (!started.ok) {
+      rangeStatus.textContent = started.error;
+      // Only a denial is one tap from fixed; an OS too old has no button.
+      if (started.needsPermission) rangeSource.requestPermissions();
+      return;
+    }
+
+    ranging = true;
+    rangeBtn.textContent = 'STOP MEASURING';
+    rangeStatus.textContent = `MEASURING VIA ${caps.best.label}.`;
+    if (!rangeTimer) rangeTimer = setInterval(pollRange, RANGE_POLL_MS);
+  }
+
+  /** The panel exists only while a device is selected and this phone can range at all. */
+  function syncRangePanel() {
+    if (!rangingPossible || !selectedAddress) {
+      stopRanging();
+      rangePanel.classList.add('hidden');
+      return;
+    }
+    rangePanel.classList.remove('hidden');
+  }
+
+  /**
+   * Show the focus block, and stop telling the user to do what they just did.
+   *
+   * The hint below the block is an instruction ("TAP A DEVICE BELOW..."), and an
+   * instruction still standing after it has been followed reads as though the
+   * tap failed -- which, given the panel used to open below the fold, is exactly
+   * what it looked like.
+   */
+  function syncFocus() {
+    const active = selectedAddress != null;
+    focusWrap.classList.toggle('hidden', !active);
+    selectHint.classList.toggle('hidden', active);
+    syncRangePanel();
+  }
+
+  showAllBtn.addEventListener('click', () => {
+    listExpanded = !listExpanded;
+    render(lastMapped);
+  });
+
+  rangeBtn.addEventListener('click', () => {
+    if (ranging) stopRanging();
+    else startRanging();
+  });
+
+  // Kotlin calls this once a permission dialog resolves, so a granted request
+  // starts measuring without the user having to tap MEASURE a second time.
+  window.__signalboyRangePermissions = () => {
+    if (selectedAddress && !ranging) startRanging();
+  };
 
   function toggleSelect(address) {
     const selecting = selectedAddress !== address;
@@ -181,6 +462,11 @@ export function createBleView(root, context) {
     // dropping it -- starts a fresh hunt, so the peak from whatever was
     // tracked before must not leak into it.
     if (selecting) peakDbm = null;
+    // A ranging session is bound to the address it was started with, so
+    // changing (or dropping) the selection must end it rather than leave it
+    // measuring a device the user is no longer looking at.
+    stopRanging();
+    syncFocus();
     render(lastMapped);
     updateTracking();
   }
@@ -189,16 +475,33 @@ export function createBleView(root, context) {
     lastMapped = mapped;
     clear(list);
 
+    rememberFirstSeen(mapped.devices, seenOrder);
+
     if (!mapped.devices.length) {
       count.textContent = '';
+      showAllBtn.classList.add('hidden');
       return;
     }
 
     count.textContent = `${mapped.devices.length} DEVICE${mapped.devices.length === 1 ? '' : 'S'}`;
 
-    for (const d of mapped.devices) {
+    // Frozen only while something is selected: with nothing picked, loudest-first
+    // is the most useful order and nothing is being aimed at, so movement costs
+    // nothing. The instant there is a target, positions matter more than ranking.
+    const ordered = orderForDisplay(mapped.devices, seenOrder, { frozen: selectedAddress != null });
+    const { shown, hidden } = capList(ordered, {
+      limit: DEFAULT_LIST_CAP,
+      expanded: listExpanded,
+      pin: selectedAddress,
+    });
+
+    showAllBtn.classList.toggle('hidden', hidden === 0 && !listExpanded);
+    showAllBtn.textContent = listExpanded ? 'SHOW FEWER' : `SHOW ALL (${mapped.devices.length})`;
+
+    for (const d of shown) {
       const grade = gradeRssi(d.rssi);
       const selected = d.address === selectedAddress;
+      const klass = classifyBeacon(d);
       list.append(
         el(
           'div',
@@ -219,6 +522,11 @@ export function createBleView(root, context) {
           },
           el('span', { class: 'ble-swatch', style: `background:${shadeColor(grade?.shade ?? 0)}` }),
           el('span', { class: 'ble-name', text: d.name ?? 'UNNAMED' }),
+          // A best-effort identity label from the advertisement, only when it is
+          // actually recognizable -- a hint, never a claim (see beacon-classify).
+          klass.category !== 'unknown'
+            ? el('span', { class: 'ble-class', dataset: { category: klass.category }, text: klass.label })
+            : null,
           el('span', { class: 'ble-rssi', text: d.rssi == null ? 'N/A' : `${d.rssi} DBM` }),
           el('span', {
             class: 'ble-meta',
@@ -230,6 +538,8 @@ export function createBleView(root, context) {
         ),
       );
     }
+
+    logSession(mapped.devices);
   }
 
   function poll() {
@@ -246,6 +556,13 @@ export function createBleView(root, context) {
     // below already explains for the scan itself. hideRadar() is safe to call
     // whether or not the radar was ever shown.
     hideRadar();
+    // Unconditional like hideRadar() above, and for a stronger reason: ranging
+    // holds a radio link up rather than merely listening, so it must not
+    // survive a backgrounded app even when no scan was running.
+    stopRanging();
+    rangePanel.classList.add('hidden');
+    focusWrap.classList.add('hidden');
+    selectHint.classList.remove('hidden');
     if (!scanning) {
       return;
     }
@@ -264,6 +581,13 @@ export function createBleView(root, context) {
     selectedAddress = null;
     filters.clear();
     tracking.textContent = '';
+    // The session log and any re-acquire offer belong to the run that just
+    // ended -- start fresh next time rather than carrying stale devices over.
+    session.clear();
+    renderSession();
+    reacquireBtn.classList.add('hidden');
+    lastTrackedSignature = null;
+    peersAtLastSight = [];
   }
 
   function start() {
@@ -297,6 +621,19 @@ export function createBleView(root, context) {
   radarReset.addEventListener('click', () => {
     peakDbm = lastFiltered;
     if (selectedAddress) renderRadar(lastFiltered, lastFiltered == null);
+  });
+
+  // Adopt a re-association as a brand-new selection: fresh filter, fresh peak.
+  // Nothing about the old track carries over -- the match is only a lead.
+  reacquireBtn.addEventListener('click', () => {
+    const address = reacquireBtn.dataset.address;
+    if (!address) return;
+    selectedAddress = address;
+    peakDbm = null;
+    lastFiltered = null;
+    reacquireBtn.classList.add('hidden');
+    render(lastMapped);
+    updateTracking();
   });
 
   // A radio scan left running behind a hidden tab, or a backgrounded app, is a

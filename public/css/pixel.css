@@ -477,7 +477,27 @@ canvas {
 @media (max-width: 640px) {
   body { padding: 0; }
   .device { border-width: 0; padding: calc(var(--u) / 2); }
-  .tab { flex: 1 1 100%; }
+
+  /* Was `.tab { flex: 1 1 100% }`, which gave every tab its own full-width row.
+     With seven views that is seven rows -- measured at roughly a third of a
+     1080x2400 screen, pushed in front of the content on every single view, and
+     out of reach without scrolling back up. A four-column grid puts the same
+     seven tabs in two rows with nothing hidden and no horizontal scrolling to
+     discover. */
+  .tabs {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .tab {
+    flex: 0 1 auto;
+    padding: var(--u) calc(var(--u) / 2);
+    /* The grid track, not the label, decides the width now, so a long label
+       (PLATFORM) shrinks to fit instead of forcing its column wider. */
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 /* ---------- walk mode ---------- */
@@ -544,8 +564,13 @@ canvas {
      inside ordinary tokens ("CH 9", "WPA2-PSK-CCMP") at phone width. Putting
      BSSID on its own row removes it from that width calculation entirely. Do
      not compact this back into the rssi row. */
+  /* The optional `flag` row carries the SUSPECT badge for a rogue-detector
+     hit. On an ordinary AP no flag element is emitted, so the row holds no
+     content and (with a 0 row-gap) adds no height -- the layout is identical
+     to before for every clean network. */
   grid-template-areas:
     'swatch ssid rssi'
+    'swatch flag flag'
     'swatch meta meta'
     'swatch bssid bssid';
   gap: 0 var(--u);
@@ -561,6 +586,46 @@ canvas {
 /* De-emphasised: it earns its own line (two networks can share an SSID, and
    this is the only thing telling them apart) but not a column beside dBm. */
 .ap-bssid  { grid-area: bssid; color: var(--lcd-1); }
+
+/* A rogue-detector hit: a heavier border on the row and an inverted badge on
+   its own line, enough to catch the eye without breaking the list's rhythm. */
+.ap[data-suspect="true"] { border-width: calc(var(--border) * 2); }
+.ap-flag {
+  grid-area: flag;
+  justify-self: start;
+  background: var(--lcd-0);
+  color: var(--lcd-3);
+  padding: 0 var(--u);
+}
+
+/* SUSPECT APS panel: one finding per row, worst-first. */
+.rogue {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'ssid sev'
+    'reason reason'
+    'vendors vendors';
+  gap: 0 var(--u);
+  border: var(--border) solid var(--lcd-0);
+  padding: var(--u);
+  margin-bottom: var(--u);
+}
+.rogue-ssid    { grid-area: ssid; }
+.rogue-sev     { grid-area: sev; }
+.rogue-reason  { grid-area: reason; color: var(--lcd-1); }
+.rogue-vendors { grid-area: vendors; color: var(--lcd-1); }
+/* A high-severity (open-twin) finding inverts its badge; medium stays plain. */
+.rogue[data-severity="high"] .rogue-sev {
+  background: var(--lcd-0);
+  color: var(--lcd-3);
+  padding: 0 var(--u);
+}
+
+/* SPECTRUM panel: band switch buttons above the pixel channel chart. */
+.spectrum-bands { display: flex; gap: var(--u); margin-bottom: var(--u); flex-wrap: wrap; }
+.spectrum-band[aria-pressed="true"] { background: var(--lcd-0); color: var(--lcd-3); }
+.spectrum-canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; }
 
 /* HUNT: one row per BLE advertisement. Same grid shape as .ap above -- kept
    as its own class set rather than shared, so a future change to one list
@@ -581,8 +646,12 @@ canvas {
 .ble-row {
   display: grid;
   grid-template-columns: var(--u) 1fr auto;
+  /* Optional `class` row carries the beacon-classify hint; emitted only for a
+     recognized device, so an unknown one holds no content there and the row
+     adds no height (0 row-gap) -- identical layout to before for plain devices. */
   grid-template-areas:
     'swatch name rssi'
+    'swatch class class'
     'swatch meta meta'
     'swatch addr addr';
   gap: 0 var(--u);
@@ -595,6 +664,14 @@ canvas {
 .ble-name   { grid-area: name; }
 .ble-rssi   { grid-area: rssi; }
 .ble-meta   { grid-area: meta; color: var(--lcd-1); }
+.ble-class  { grid-area: class; justify-self: start; color: var(--lcd-1); }
+/* A tracker is the one class worth making pop: it inverts, everything else
+   stays a quiet caption, so "AIRTAG-CLASS" catches the eye in a busy list. */
+.ble-class[data-category="tracker"] {
+  background: var(--lcd-0);
+  color: var(--lcd-3);
+  padding: 0 var(--u);
+}
 /* The address is the only thing distinguishing two unnamed devices, and it
    rotates on modern trackers besides -- own line, not a column beside dBm,
    same reasoning as .ap-bssid. */
@@ -640,10 +717,122 @@ canvas {
   font-weight: 700;
 }
 
+/* The re-acquire offer: a full-width call to action under the lost-track line,
+   inverted so a possible MAC-rotation match reads as an invitation, not a
+   verdict -- the "?" in its label carries the uncertainty. */
+.ble-reacquire {
+  display: block;
+  width: 100%;
+  margin-top: var(--u);
+}
+
+/* TRACKED THIS SESSION: one row per address seen since START. */
+.tracked-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'name count'
+    'class class'
+    'addr addr';
+  gap: 0 var(--u);
+  border: var(--border) solid var(--lcd-0);
+  padding: var(--u);
+  margin-bottom: var(--u);
+}
+.tracked-name  { grid-area: name; }
+.tracked-count { grid-area: count; color: var(--lcd-1); }
+.tracked-class { grid-area: class; justify-self: start; color: var(--lcd-1); }
+.tracked-addr  { grid-area: addr; color: var(--lcd-1); }
+.tracked-class[data-category="tracker"] {
+  background: var(--lcd-0);
+  color: var(--lcd-3);
+  padding: 0 var(--u);
+}
+
+/* ---------- CELL (neighbour cell list) ---------- */
+.cell-row {
+  display: grid;
+  grid-template-columns: var(--u) 1fr auto;
+  grid-template-areas:
+    'swatch type dbm'
+    'swatch id id';
+  gap: 0 var(--u);
+  align-items: center;
+  border: var(--border) solid var(--lcd-0);
+  padding: var(--u);
+  margin-bottom: var(--u);
+}
+.cell-swatch { grid-area: swatch; align-self: stretch; }
+.cell-type   { grid-area: type; }
+.cell-dbm    { grid-area: dbm; }
+.cell-id     { grid-area: id; color: var(--lcd-1); }
+
+/* ---------- LINK (passive stability + active throughput) ---------- */
+.link-spark { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+.link-bar { display: flex; gap: var(--u); margin-bottom: var(--u); }
+/* The one text input in the app: match the pixel theme rather than the OS
+   default, same border/type language as .btn. */
+.link-url {
+  width: 100%;
+  margin-bottom: var(--u);
+  padding: var(--u);
+  border: var(--border) solid var(--lcd-0);
+  background: var(--lcd-3);
+  color: var(--lcd-0);
+  font: inherit;
+  text-transform: none;
+}
+
 /* ---------- radar (concentric proximity rings for the selected device) ---------- */
 /* The canvas draws its own border-free dartboard, so the wrap supplies the
    frame every other panel in this app gets from `.lcd`/`.ap`-style borders --
    without it the radar would be the one bordered element missing its border. */
+/* The selected device's whole story -- trend, radar, distance, tone -- as one
+   block above the list. Drawn with a heavier border than the rows below so it
+   reads as the subject of the screen rather than another list item. */
+.ble-focus {
+  display: flex;
+  flex-direction: column;
+  gap: var(--u);
+  margin-bottom: var(--u);
+  padding: var(--u);
+  border: calc(var(--border) * 2) solid var(--lcd-0);
+  background: var(--lcd-3);
+}
+
+/* The radar already carries its own border; a second one inside the focus
+   block just draws a box in a box. */
+.ble-focus .radar-wrap {
+  border: 0;
+  margin-top: 0;
+  padding: 0;
+}
+
+.ble-show-all {
+  width: 100%;
+  margin-top: var(--u);
+}
+
+/* Big enough to read at arm's length while walking -- this is the number the
+   whole panel exists for. */
+.range-readout {
+  margin: 0;
+  font-size: calc(var(--u) * 4);
+  line-height: 1;
+}
+
+/* Deliberately not styled to match .range-readout: the provenance line has to
+   stay legible rather than decorative, because it is what distinguishes a timed
+   measurement from an RSSI estimate. */
+.range-provenance {
+  margin: calc(var(--u) / 2) 0 0;
+}
+
+.range-panel .btn {
+  width: 100%;
+  margin-top: var(--u);
+}
+
 .radar-wrap {
   display: flex;
   flex-direction: column;
