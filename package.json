@@ -1,6 +1,6 @@
 {
   "name": "signalboy",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "description": "WiFi survey and RF tool that runs on your own machine. Walk around, watch the dBm move.",
   "keywords": [
